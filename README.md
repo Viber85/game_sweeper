@@ -21,6 +21,8 @@ installed games and possible leftovers. It cannot delete files.
 4. Open GameSweep from the Decky Quick Access menu; scan your libraries.
 5. Use **Settings & updates -> Check GitHub updates** to check for and install future versions.
 
+If no ZIP appears in Releases, enable **Actions** for this repository and run **Build & publish GameSweep preview** manually. The first run must finish successfully before a Decky-installable ZIP exists.
+
 The ZIP includes a top-level **GameSweep/** plugin folder. Do not install GitHub's automatic source-code ZIP.
 
 ## Build from source
