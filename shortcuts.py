@@ -68,6 +68,10 @@ def decode_binary_vdf(raw: bytes) -> dict[str, Any]:
             else:
                 raise ShortcutDecodeError("Unknown VDF field type " + str(field_type))
             result[key] = value
+        # Steam shortcuts.vdf may end after the root object closes,
+        # without an additional top-level terminator.
+        if depth == 0:
+            return result
         raise ShortcutDecodeError("Missing VDF object terminator")
 
     return read_object(0)
