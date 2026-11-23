@@ -1,0 +1,54 @@
+name: Build & publish GameSweep preview
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Test scanner
+        run: python -m unittest discover -s tests -v
+      - name: Build Decky frontend
+        run: npm run build
+      - name: Package plugin
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p 'require("./package.json").version')"
+          TAG="v$VERSION"
+          mkdir -p "package/GameSweep/dist"
+          cp main.py scanner.py plugin.json package.json "package/GameSweep/"
+          cp dist/index.js "package/GameSweep/dist/"
+          cd package
+          zip -q -r "../GameSweep-$TAG.zip" GameSweep
+          cd ..
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "zip=GameSweep-$TAG.zip" >> "$GITHUB_OUTPUT"
+          unzip -l "GameSweep-$TAG.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GameSweep-${{ steps.package.outputs.tag }}
+          path: ${{ steps.package.outputs.zip }}
+      - name: Create prerelease if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.package.outputs.tag }}"
+          ZIP="${{ steps.package.outputs.zip }}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" "$ZIP" --target "$GITHUB_SHA" --title "GameSweep $TAG" --notes "Read-only SteamOS storage scanner for Decky Loader. This is a testing preview; no cleanup operations are enabled." --prerelease
+          else
+            echo "Release already exists. Bump package.json version before shipping another release."
+          fi
