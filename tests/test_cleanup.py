@@ -45,7 +45,7 @@ class CleanupTests(unittest.TestCase):
         (self.apps / "appmanifest_3456.acf").write_text(
             '"AppState" { "appid" "3456" "name" "New Installation" }'
         )
-        with self.assertRaisesRegex(CleanupError, "protected"):
+        with self.assertRaisesRegex(CleanupError, "authorization"):
             execute_cleanup(self.home, self.cache, preview)
         self.assertTrue((self.apps / "compatdata/3456").exists())
 

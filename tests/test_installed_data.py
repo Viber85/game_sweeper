@@ -10,6 +10,10 @@ import unittest
 from pathlib import Path
 
 sys.modules.setdefault("decky", types.ModuleType("decky"))
+sys.modules["decky"].logger = types.SimpleNamespace(
+    info=lambda *args, **kwargs: None,
+    warning=lambda *args, **kwargs: None,
+)
 
 from cleanup import CleanupError, execute_cleanup, preview_cleanup
 from main import Plugin
