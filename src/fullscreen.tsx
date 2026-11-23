@@ -140,7 +140,7 @@ function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows, 
                       </ButtonItem>
                     )}
                   </div>
-                )
+                )}
                 {entry.name_source === "unknown" && entry.status !== "review" && (
                   <div className="gs-action">
                     <ButtonItem layout="below"
