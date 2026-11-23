@@ -30,7 +30,7 @@ def release(version, filename=None, draft=False):
 class UpdaterTests(unittest.TestCase):
     def test_newer_release_is_detected(self):
         with patch.object(updater, "_download_json", return_value=[
-            release("0.3.1"), release("0.4.2"), release("0.5.0")
+            release("0.4.1"), release("0.5.2"), release("0.5.1")
         ]):
             data = updater._github_update()
         self.assertTrue(data["available"])
