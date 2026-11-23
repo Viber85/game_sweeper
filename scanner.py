@@ -161,19 +161,34 @@ def scan(home: Path, cache_file: Path) -> dict[str, Any]:
     installed = manifests(libraries)
     active_shortcuts, older_shortcuts = collect_shortcuts(steam_roots(home))
     titles = read_cache(cache_file)
-    changed = False
-    # Save discovered names even after future shortcut removal.
-    # Backups can recover labels but never prove a game is installed.
+    # Persist *provenance*, not a guess based on numerical AppID ranges.
+    # This preserves Steam/Non-Steam identification after uninstalling a game
+    # or removing a shortcut, whenever the game was previously observed.
+    type_file = cache_file.with_name("known_types.json")
+    known_types = read_cache(type_file)
+    changed_names = False
+    changed_types = False
     known = {**older_shortcuts, **active_shortcuts, **installed}
     for appid, name in known.items():
         if name and titles.get(appid) != name:
             titles[appid] = name
-            changed = True
-    if changed:
-        try:
+            changed_names = True
+    # Most reliable evidence wins. The main Steam manifest overrides a
+    # conflicting shortcut; an active shortcut overrides an old backup.
+    observed_types = {appid: "non_steam" for appid in older_shortcuts}
+    observed_types.update({appid: "non_steam" for appid in active_shortcuts})
+    observed_types.update({appid: "steam" for appid in installed})
+    for appid, kind in observed_types.items():
+        if known_types.get(appid) != kind:
+            known_types[appid] = kind
+            changed_types = True
+    try:
+        if changed_names:
             write_cache(cache_file, titles)
-        except OSError:
-            pass  # scanning must succeed even if settings are read-only
+        if changed_types:
+            write_cache(type_file, known_types)
+    except OSError:
+        pass  # Scanning still succeeds if settings storage is read-only.
 
     items: list[dict[str, Any]] = []
     for steamapps in libraries:
@@ -223,6 +238,18 @@ def scan(home: Path, cache_file: Path) -> dict[str, Any]:
             else:
                 status = "candidate"
                 reason = "No installed Steam manifest found; verify before any cleanup"
+            if appid in installed:
+                game_type, type_source = "steam", "manifest"
+            elif appid in active_shortcuts:
+                game_type, type_source = "non_steam", "shortcut"
+            elif appid in older_shortcuts:
+                game_type, type_source = "non_steam", "backup"
+            elif known_types.get(appid) in ("steam", "non_steam"):
+                game_type, type_source = known_types[appid], "history"
+            else:
+                game_type, type_source = "unknown", "unknown"
+            row["game_type"] = game_type
+            row["type_source"] = type_source
             row["status"] = status
             row["reason"] = reason
             row["name"] = (
@@ -253,7 +280,7 @@ def scan(home: Path, cache_file: Path) -> dict[str, Any]:
         except OSError:
             continue
     return {
-        "version": "0.3.1",
+        "version": "0.4.0",
         "scanned_at": datetime.now(timezone.utc).isoformat(),
         "libraries": [str(path.parent) for path in libraries],
         "disks": disks,

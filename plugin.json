@@ -5,7 +5,7 @@
   "api_version": 1,
   "publish": {
     "tags": ["storage", "steam", "utility"],
-    "description": "Read-only compatdata and shader cache scanner for SteamOS.",
+    "description": "Fullscreen SteamOS storage manager with manual confirmed cleanup and game source detection.",
     "image": "https://opengraph.githubassets.com/1/Viber85/game_sweeper"
   }
 }

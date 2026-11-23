@@ -1,12 +1,12 @@
-import { ButtonItem, Navigation, Router, staticClasses } from "@decky/ui";
+import { Navigation, Router, staticClasses } from "@decky/ui";
 import { definePlugin, routerHook } from "@decky/api";
-import { FaBroom, FaExpandArrowsAlt } from "react-icons/fa";
+import { useEffect } from "react";
+import { FaBroom } from "react-icons/fa";
 import { GameSweepFullScreen } from "./fullscreen";
 
 const FULLSCREEN_PATH = "/gamesweep";
 
 function openFullScreen(): void {
-  // Open a real Game Mode route, not a CSS overlay inside the QAM panel.
   Router.CloseSideMenus();
   try {
     Navigation.Navigate(FULLSCREEN_PATH);
@@ -15,19 +15,19 @@ function openFullScreen(): void {
   }
 }
 
+/** Mounted when the GameSweep QAM entry is opened.
+ * Open its own route immediately; no intermediate launcher button.
+ */
 function Launcher() {
+  useEffect(() => {
+    // Defer navigation one tick so Steam finishes rendering the QAM entry.
+    const timer = window.setTimeout(openFullScreen, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
-    <div style={{ padding: 12, minWidth: 0 }}>
-      <div style={{ marginBottom: 12, fontSize: 12, opacity: 0.75 }}>
-        GameSweep has its own fullscreen interface in SteamOS Game Mode.
-      </div>
-      <ButtonItem layout="below" onClick={openFullScreen}>
-        <FaExpandArrowsAlt style={{ marginRight: 8 }} />
-        Open GameSweep fullscreen
-      </ButtonItem>
-      <div style={{ fontSize: 11, opacity: 0.7, marginTop: 12 }}>
-        Preview scanner only. No delete operations.
-      </div>
+    <div style={{ padding: 12, fontSize: 13, opacity: 0.8 }}>
+      Opening GameSweep fullscreen…
     </div>
   );
 }

@@ -85,7 +85,7 @@ def _target_stat(library: str, appid: str, kind: str) -> tuple[Path, os.stat_res
     return target, info
 
 
-def _current_selection(home: Path, cache_file: Path, library: str, appid: str, kind: str) -> dict[str, Any]:
+def _current_selection(home: Path, cache_file: Path, library: str, appid: str, kind: str, allow_installed: bool = False) -> dict[str, Any]:
     _validate_input(library, appid, kind)
     current = scan(home, cache_file)
     if current["missing_libraries"]:
@@ -95,8 +95,8 @@ def _current_selection(home: Path, cache_file: Path, library: str, appid: str, k
     match = next((i for i in current["entries"] if i["id"] == appid and i["library"] == library), None)
     if match is None:
         raise CleanupError("AppID not found on the selected library")
-    if match["status"] == "installed":
-        raise CleanupError("An installed Steam game or active Non-Steam shortcut is protected")
+    if match["status"] == "installed" and allow_installed is not True:
+        raise CleanupError("Installed-game data needs separate explicit authorization")
     key = kind + "_path"
     target, info = _target_stat(library, appid, kind)
     if not match.get(key) or Path(match[key]) != target:
@@ -110,14 +110,17 @@ def _current_selection(home: Path, cache_file: Path, library: str, appid: str, k
         "target": str(target),
         "name": match["name"],
         "status": match["status"],
+        "game_type": match["game_type"],
+        "type_source": match["type_source"],
+        "allow_installed": allow_installed is True,
         "bytes": match[kind + "_bytes"],
         "device": info.st_dev,
         "inode": info.st_ino,
     }
 
 
-def preview_cleanup(home: Path, cache_file: Path, library: str, appid: str, kind: str) -> dict[str, Any]:
-    entry = _current_selection(home, cache_file, library, appid, kind)
+def preview_cleanup(home: Path, cache_file: Path, library: str, appid: str, kind: str, allow_installed: bool = False) -> dict[str, Any]:
+    entry = _current_selection(home, cache_file, library, appid, kind, allow_installed=allow_installed)
     # Keep the filesystem fingerprint in backend-only state; do not expose it
     # to user-provided values on execution.
     return entry
@@ -129,8 +132,13 @@ def execute_cleanup(home: Path, cache_file: Path, preview: dict[str, Any]) -> di
         raise CleanupError("This Python platform cannot guarantee symlink-safe deletion")
     fresh = _current_selection(
         home, cache_file,
-        preview["library"], preview["appid"], preview["kind"]
+        preview["library"], preview["appid"], preview["kind"],
+        allow_installed=preview["allow_installed"]
     )
+    # A preview is valid only for the state and classification it showed.
+    # If a shortcut or installation changes, ask for a new confirmation.
+    if fresh["status"] != preview["status"] or fresh["game_type"] != preview["game_type"]:
+        raise CleanupError("Game installation or classification changed since confirmation")
     if fresh["target"] != preview["target"]:
         raise CleanupError("Target path changed since confirmation")
     if (fresh["device"], fresh["inode"]) != (preview["device"], preview["inode"]):

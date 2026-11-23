@@ -1,6 +1,7 @@
 import { callable } from "@decky/api";
 
 export type Status = "installed" | "candidate" | "review";
+export type GameType = "steam" | "non_steam" | "unknown";
 export type Tab = "overview" | "libraries" | "results" | "review" | "settings";
 export type Filter = "all" | Status;
 
@@ -8,6 +9,8 @@ export type Entry = {
   id: string;
   name: string;
   name_source: string;
+  game_type: GameType;
+  type_source: string;
   status: Status;
   reason: string;
   library: string;
@@ -65,6 +68,8 @@ export type CleanupPreview = {
   appid?: string;
   kind?: CleanupKind;
   status?: Status;
+  game_type?: GameType;
+  type_source?: string;
   bytes?: number;
   path?: string;
 };
@@ -77,7 +82,7 @@ export type CleanupResult = {
   bytes?: number;
 };
 export const prepareCleanup = callable<
-  [library: string, appid: string, kind: CleanupKind], CleanupPreview
+  [library: string, appid: string, kind: CleanupKind, allow_installed: boolean], CleanupPreview
 >("prepare_cleanup");
 export const deleteStorage = callable<
   [token: string, confirmation: string], CleanupResult

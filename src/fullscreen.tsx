@@ -10,7 +10,7 @@ import {
   bytes, checkUpdate, requestDeckyUpdate, resolveName, scanStorage,
   prepareCleanup, deleteStorage
 } from "./api";
-import type { Disk, Entry, Filter, ScanData, Tab, UpdateInfo, CleanupPreview, CleanupKind } from "./api";
+import type { Disk, Entry, Filter, ScanData, Tab, UpdateInfo, CleanupPreview, CleanupKind, GameType } from "./api";
 import { style } from "./styles";
 
 const TABS: Array<{ id: Tab; label: string; icon: ReactNode }> = [
@@ -75,6 +75,12 @@ function StatusPill({ status }: { status: Entry["status"] }) {
   return <span className={"gs-status " + status}>{label}</span>;
 }
 
+function GameTypePill({ type }: { type: GameType }) {
+  const label = type === "steam" ? "Steam" :
+    type === "non_steam" ? "Non-Steam" : "Unknown source";
+  return <span className={"gs-type gs-type-" + type}>{label}</span>;
+}
+
 function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows, onDelete, cleanupBusy }: {
   entries: Entry[];
   selected: string;
@@ -108,8 +114,11 @@ function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows, 
                   <div className="gs-game-initial">{initials}</div>
                   <div style={{ minWidth: 0 }}>
                     <div className="gs-game-title">{entry.name}</div>
-                    <div className="gs-game-hint">{entry.prefix_bytes ? "Compatdata" : "Shader cache"}
-                      {entry.prefix_bytes && entry.shader_bytes ? " + shader cache" : ""}</div>
+                    <div className="gs-game-hint">
+                      <GameTypePill type={entry.game_type} />
+                      <span>{entry.prefix_bytes ? "Compatdata" : "Shader cache"}
+                        {entry.prefix_bytes && entry.shader_bytes ? " + shader cache" : ""}</span>
+                    </div>
                   </div>
                 </div>
                 <div className="gs-col-text">{entry.id}</div>
@@ -124,9 +133,9 @@ function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows, 
                 <div>Library: {entry.library}</div>
                 {!!entry.prefix_path && <div>Compatdata path: {entry.prefix_path}</div>}
                 {!!entry.shader_path && <div>Shader path: {entry.shader_path}</div>}
+                <div>Game source: {entry.game_type === "steam" ? "Steam" : entry.game_type === "non_steam" ? "Non-Steam" : "Unknown"} · Evidence: {entry.type_source}</div>
                 <div>Title source: {entry.name_source}</div>
-                {entry.status !== "installed" && (
-                  <div className="gs-action gs-delete-row">
+                <div className="gs-action gs-delete-row">
                     {!!entry.prefix_path && (
                       <ButtonItem layout="below" disabled={cleanupBusy}
                         onClick={() => onDelete(entry, "prefix")}>
@@ -139,8 +148,7 @@ function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows, 
                         Delete shader cache…
                       </ButtonItem>
                     )}
-                  </div>
-                )}
+                </div>
                 {entry.name_source === "unknown" && entry.status !== "review" && (
                   <div className="gs-action">
                     <ButtonItem layout="below"
@@ -178,6 +186,7 @@ export function GameSweepFullScreen() {
   const [data, setData] = useState<ScanData | null>(null);
   const [diskId, setDiskId] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [typeFilter, setTypeFilter] = useState<GameType | "all">("all");
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState(false);
   const [lookupBusy, setLookupBusy] = useState("");
@@ -190,6 +199,7 @@ export function GameSweepFullScreen() {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [deletePreview, setDeletePreview] = useState<CleanupPreview | null>(null);
   const [deleteAcknowledged, setDeleteAcknowledged] = useState(false);
+  const [installedAcknowledged, setInstalledAcknowledged] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [cleanupPreparing, setCleanupPreparing] = useState(false);
   const [cleanupNotice, setCleanupNotice] = useState("");
@@ -244,7 +254,10 @@ export function GameSweepFullScreen() {
     (sum, item) => sum + (item.status === "candidate" ? item.bytes : 0), 0
   );
   const allEntries = data?.entries || [];
-  const filtered = allEntries.filter(entry => filter === "all" || entry.status === filter);
+  const filtered = allEntries.filter(entry =>
+    (filter === "all" || entry.status === filter) &&
+    (typeFilter === "all" || entry.game_type === typeFilter)
+  );
 
   async function nameLookup(id: string) {
     setError("");
@@ -291,17 +304,18 @@ export function GameSweepFullScreen() {
   }
 
   async function requestDeletion(entry: Entry, kind: CleanupKind) {
-    if (entry.status === "installed" || cleanupPreparing || deleting) return;
+    if (cleanupPreparing || deleting) return;
     setCleanupNotice("");
     setError("");
     setCleanupPreparing(true);
     try {
-      const result = await prepareCleanup(entry.library, entry.id, kind);
+      const result = await prepareCleanup(entry.library, entry.id, kind, entry.status === "installed");
       if (!result.ok || !result.token) {
         setError("Delete refused: " + (result.error || "Unable to verify the folder"));
         return;
       }
       setDeleteAcknowledged(false);
+      setInstalledAcknowledged(false);
       setDeletePreview(result);
     } catch (e) {
       setError("Delete preview failed: " + String(e));
@@ -311,11 +325,14 @@ export function GameSweepFullScreen() {
   }
 
   async function confirmDeletion() {
-    if (!deletePreview?.token || !deleteAcknowledged || deleting) return;
+    if (!deletePreview?.token || !deleteAcknowledged ||
+        (deletePreview.status === "installed" && !installedAcknowledged) || deleting) return;
     setDeleting(true);
     setError("");
     try {
-      const result = await deleteStorage(deletePreview.token, "PERMANENT_DELETE");
+      const confirmation = deletePreview.status === "installed" ?
+        "PERMANENT_DELETE_INSTALLED" : "PERMANENT_DELETE";
+      const result = await deleteStorage(deletePreview.token, confirmation);
       if (!result.ok || !result.success) {
         setError("Cleanup failed: " + (result.error || "Unknown error"));
         setDeletePreview(null);
@@ -354,6 +371,19 @@ export function GameSweepFullScreen() {
           </ButtonItem>
         </div>
       ))}
+      <div className="gs-source-filters">
+        <span className="gs-muted" style={{ padding: "8px 6px 0 0" }}>Source</span>
+        {([
+          ["all", "All sources"], ["steam", "Steam"],
+          ["non_steam", "Non-Steam"], ["unknown", "Unknown"]
+        ] as Array<[GameType | "all", string]>).map(([value, label]) => (
+          <div className={"gs-filter" + (typeFilter === value ? " gs-selected" : "")} key={value}>
+            <ButtonItem layout="below" onClick={() => setTypeFilter(value)}>
+              {label}
+            </ButtonItem>
+          </div>
+        ))}
+      </div>
     </div>
   );
 
@@ -394,7 +424,7 @@ export function GameSweepFullScreen() {
               <h1 className="gs-title">GameSweep <span style={{ color: "#6f859f" }}>/</span> {title}</h1>
               <div className="gs-subtitle">Compatdata and shader cache overview for SteamOS</div>
             </div>
-            <div className="gs-right-tag">Game Mode · v0.3.1</div>
+            <div className="gs-right-tag">Game Mode · v0.4.0</div>
           </header>
 
           {!!error && <div className="gs-note"><FaExclamationTriangle style={{ marginRight: 8 }} />{error}</div>}
@@ -503,8 +533,9 @@ export function GameSweepFullScreen() {
               <div className="gs-note">
                 <FaShieldAlt style={{ marginRight: 8 }} />
                 Cleanup is permanent. A missing manifest is not proof that a folder is safe to delete.
-                Open an entry and choose compatdata or shader cache to review the confirmation.
-                Close running games first. Proton prefixes may contain unique saves.
+                All games, including installed Steam and Non-Steam games, can have their
+                compatdata or shader cache removed individually. Close running games first.
+                Removing compatdata may destroy unique saves and does NOT uninstall the game.
               </div>
               <section className="gs-card gs-section">
                 <div className="gs-section-heading">
@@ -524,8 +555,8 @@ export function GameSweepFullScreen() {
           {tab === "settings" && (
             <div className="gs-card gs-settings">
               <h2 style={{ marginTop: 0 }}>GameSweep</h2>
-              <p className="gs-muted">Version 0.3.1 · GitHub: Viber85/game_sweeper</p>
-              <p className="gs-muted">Fullscreen SteamOS Game Mode interface with guarded, opt-in deletion.</p>
+              <p className="gs-muted">Version 0.4.0 · GitHub: Viber85/game_sweeper</p>
+              <p className="gs-muted">Fullscreen SteamOS storage manager. Installed-game data removal requires two acknowledgments.</p>
               <div className="gs-settings-row">
                 <div>
                   <strong>GitHub updates</strong>
@@ -575,11 +606,25 @@ export function GameSweepFullScreen() {
               <div className="gs-modal-symbol"><FaExclamationTriangle /></div>
               <h2>Confirm permanent deletion</h2>
               <p className="gs-modal-subtitle">
-                This operation cannot be undone. No backup is created.
+                This removes only the selected compatdata or shader cache folder.
+                It does not uninstall the game. No backup or undo is available.
               </p>
+              {deletePreview.status === "installed" && (
+                <div className="gs-installed-warning">
+                  <FaExclamationTriangle style={{ marginRight: 8 }} />
+                  This game is STILL INSTALLED. Removing its Proton data can reset
+                  its configuration, break launchers, and permanently erase local saves.
+                  Steam may recreate the folder when the game launches.
+                </div>
+              )}
               <div className="gs-modal-details">
                 <strong>{deletePreview.name || "Unknown game"}</strong>
                 <span>AppID {deletePreview.appid}</span>
+                <span>
+                  Source: {deletePreview.game_type === "steam" ? "Steam" :
+                    deletePreview.game_type === "non_steam" ? "Non-Steam" : "Unknown"}
+                  {" · "}Status: {deletePreview.status === "installed" ? "Installed" : "Not confirmed installed"}
+                </span>
                 <span>
                   {deletePreview.kind === "prefix" ? "Proton compatdata" : "Shader cache"}
                   {" · "}{bytes(deletePreview.bytes || 0)}
@@ -602,10 +647,21 @@ export function GameSweepFullScreen() {
                   onClick={() => setDeleteAcknowledged(!deleteAcknowledged)}>
                   {deleteAcknowledged ? "✓ I understand permanent data loss" : "□ I understand permanent data loss"}
                 </ButtonItem>
+                {deletePreview.status === "installed" && (
+                  <ButtonItem layout="below" disabled={deleting}
+                    onClick={() => setInstalledAcknowledged(!installedAcknowledged)}>
+                    {installedAcknowledged ? "✓ I know this game is installed" :
+                      "□ I know this game is installed and may lose its saves"}
+                  </ButtonItem>
+                )}
                 <div className="gs-delete-button">
-                  <ButtonItem layout="below" disabled={!deleteAcknowledged || deleting}
+                  <ButtonItem layout="below"
+                    disabled={!deleteAcknowledged ||
+                      (deletePreview.status === "installed" && !installedAcknowledged) || deleting}
                     onClick={() => { void confirmDeletion(); }}>
-                    {deleting ? "Deleting…" : "Delete permanently"}
+                    {deleting ? "Deleting…" :
+                      deletePreview.status === "installed" ? "Delete installed-game data permanently" :
+                      "Delete permanently"}
                   </ButtonItem>
                 </div>
               </div>

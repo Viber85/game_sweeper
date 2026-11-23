@@ -103,4 +103,12 @@ export const style = `
 .gs-delete-button .DialogButton{background:linear-gradient(120deg,#b44b54,#cf6863)!important;color:white!important;font-weight:700!important}
 .gs-delete-button .DialogButton:disabled{opacity:.38!important}
 @media (max-height:660px){.gs-modal{padding:15px 20px}.gs-modal-details{padding:10px}.gs-modal-warning{font-size:11px;margin:9px 0}}
+
+.gs-game-hint{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.gs-type{font-size:10px;font-weight:750;border:1px solid transparent;border-radius:6px;padding:2px 6px;white-space:nowrap}
+.gs-type-steam{color:#83ccff;background:rgba(42,126,200,.17);border-color:rgba(95,163,235,.35)}
+.gs-type-non_steam{color:#83e6c7;background:rgba(29,167,119,.13);border-color:rgba(72,205,161,.36)}
+.gs-type-unknown{color:#c3bdca;background:rgba(139,135,158,.12);border-color:rgba(162,163,175,.24)}
+.gs-source-filters{width:100%;display:flex;flex-wrap:wrap;gap:6px;margin-top:5px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)}
+.gs-installed-warning{font-size:13px;line-height:1.55;color:#ffe0ad;background:rgba(127,64,22,.26);border:1px solid rgba(246,164,76,.5);padding:12px 15px;border-radius:10px;margin-bottom:14px}
 `;

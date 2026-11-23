@@ -1,4 +1,4 @@
-"""GameSweep v0.3.1 Decky backend with guarded opt-in cleanup."""
+"""GameSweep v0.4.0 Decky backend with guarded opt-in cleanup."""
 from __future__ import annotations
 
 import asyncio
@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from scanner import read_cache, scan, write_cache
 from cleanup import CleanupError, preview_cleanup, execute_cleanup
 
-VERSION = "0.3.1"
+VERSION = "0.4.0"
 REPO = "Viber85/game_sweeper"
 
 
@@ -124,6 +124,10 @@ class Plugin:
                     cache = read_cache(self.cache_path)
                     cache[str(appid)] = name
                     await asyncio.to_thread(write_cache, self.cache_path, cache)
+                    type_file = self.cache_path.with_name("known_types.json")
+                    types = read_cache(type_file)
+                    types[str(appid)] = "steam"
+                    await asyncio.to_thread(write_cache, type_file, types)
                 return {"found": True, "name": name}
             return {"found": False, "name": ""}
         except (OSError, HTTPError, URLError, ValueError, RuntimeError) as exc:
@@ -135,12 +139,14 @@ class Plugin:
         except (OSError, HTTPError, URLError, ValueError, RuntimeError) as exc:
             return {"available": False, "version": VERSION, "url": "", "error": _network_error(exc)}
 
-    async def prepare_cleanup(self, library: str, appid: str, kind: str):
-        """Issue a short-lived, single-use confirmation token for one directory."""
+    async def prepare_cleanup(self, library: str, appid: str, kind: str,
+                              allow_installed: bool = False):
+        """Authorize installed-game data only when explicitly requested."""
         async with self.lock:
             try:
                 selected = await asyncio.to_thread(
-                    preview_cleanup, self.home, self.cache_path, library, appid, kind
+                    preview_cleanup, self.home, self.cache_path, library, appid, kind,
+                    allow_installed is True
                 )
                 now = monotonic()
                 self.pending_deletions = {
@@ -152,7 +158,9 @@ class Plugin:
                 return {
                     "ok": True, "token": token, "name": selected["name"],
                     "appid": selected["appid"], "kind": selected["kind"],
-                    "status": selected["status"], "bytes": selected["bytes"],
+                    "status": selected["status"], "game_type": selected["game_type"],
+                    "type_source": selected["type_source"],
+                    "bytes": selected["bytes"],
                     "path": selected["target"]
                 }
             except (CleanupError, OSError, ValueError) as exc:
@@ -160,12 +168,15 @@ class Plugin:
 
     async def delete_storage(self, token: str, confirmation: str):
         """Permanently remove exactly the previewed folder after explicit consent."""
-        if confirmation != "PERMANENT_DELETE":
-            return {"ok": False, "error": "Explicit confirmation is required"}
         async with self.lock:
             pending = self.pending_deletions.pop(token, None)
             if not pending or monotonic() - pending[0] > 120:
                 return {"ok": False, "error": "Confirmation expired; preview again"}
+            installed = pending[1]["status"] == "installed"
+            expected = "PERMANENT_DELETE_INSTALLED" if installed else "PERMANENT_DELETE"
+            if confirmation != expected:
+                return {"ok": False, "error": "Explicit installed-game confirmation required"
+                        if installed else "Explicit confirmation is required"}
             try:
                 outcome = await asyncio.to_thread(
                     execute_cleanup, self.home, self.cache_path, pending[1]

@@ -36,7 +36,7 @@ class CleanupTests(unittest.TestCase):
         (self.apps / "appmanifest_1091500.acf").write_text(
             '"AppState" { "appid" "1091500" "name" "Cyberpunk 2077" }'
         )
-        with self.assertRaisesRegex(CleanupError, "protected"):
+        with self.assertRaisesRegex(CleanupError, "authorization"):
             preview_cleanup(self.home, self.cache, self.library, "1091500", "prefix")
 
     def test_protect_if_manifest_appears_after_confirmation(self):
