@@ -17,6 +17,8 @@ jobs:
           node-version: "22"
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
+      - name: Install trusted CA bundle
+        run: python -m pip install --disable-pip-version-check --no-input certifi==2026.5.20
       - name: Test scanner
         run: python -m unittest discover -s tests -v
       - name: Typecheck frontend
@@ -33,6 +35,24 @@ jobs:
           mkdir -p "package/GameSweep/dist"
           cp main.py scanner.py shortcuts.py cleanup.py plugin.json package.json "package/GameSweep/"
           cp dist/index.js "package/GameSweep/dist/"
+          python - <<'PY'
+          import certifi
+          import importlib.metadata as metadata
+          import shutil
+          from pathlib import Path
+          output = Path("package/GameSweep")
+          shutil.copyfile(certifi.where(), output / "cacert.pem")
+          license_file = next(
+              (metadata.distribution("certifi").locate_file(f)
+               for f in metadata.distribution("certifi").files
+               if f.name == "LICENSE"), None
+          )
+          if license_file is None or not license_file.exists():
+              raise RuntimeError("certifi license not found")
+          shutil.copyfile(license_file, output / "CERTIFI-LICENSE")
+          assert (output / "cacert.pem").stat().st_size > 100000
+          assert b"BEGIN CERTIFICATE" in (output / "cacert.pem").read_bytes()
+          PY
           cd package
           zip -q -r "../GameSweep-$TAG.zip" GameSweep
           cd ..
@@ -50,7 +70,7 @@ jobs:
           TAG="${{ steps.package.outputs.tag }}"
           ZIP="${{ steps.package.outputs.zip }}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" "$ZIP" --target "$GITHUB_SHA" --title "GameSweep $TAG" --notes "Read-only SteamOS storage scanner for Decky Loader. This is a testing preview; no cleanup operations are enabled." --prerelease
+            gh release create "$TAG" "$ZIP" --target "$GITHUB_SHA" --title "GameSweep $TAG" --notes "GameSweep $TAG - fullscreen scanner, manual confirmed cleanup and secure GitHub update checks with a packaged Mozilla CA bundle." --prerelease
           else
             echo "Release already exists. Bump package.json version before shipping another release."
           fi

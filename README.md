@@ -1,11 +1,11 @@
 # GameSweep
 
-Decky Loader plugin for SteamOS Game Mode. **v0.3.0 has opt-in permanent cleanup**.
+Decky Loader plugin for SteamOS Game Mode. **v0.3.1 has opt-in permanent cleanup**.
 It scans Steam compatdata and shader cache, estimates storage usage, identifies
 known Steam and Non-Steam entries, and allows deleting one verified directory at
 a time only after an explicit confirmation.
 
-v0.3.0 opens a real full-screen SteamOS route from a button in the Decky quick access panel. The Dashboard uses the actual filesystem capacity for a selected Steam library, a circular used/free disk meter, storage summaries, and expandable game results. The UI is gamepad-focusable and pressing B returns to Steam.
+v0.3.1 opens a real full-screen SteamOS route from a button in the Decky quick access panel. The Dashboard uses the actual filesystem capacity for a selected Steam library, a circular used/free disk meter, storage summaries, and expandable game results. The UI is gamepad-focusable and pressing B returns to Steam.
 
 ## Features
 - Discover Steam libraries from Steam's libraryfolders.vdf (including microSD).
@@ -19,7 +19,7 @@ v0.3.0 opens a real full-screen SteamOS route from a button in the Decky quick a
 
 ## Install
 1. Install Decky Loader on SteamOS.
-2. Open [GitHub Releases](https://github.com/Viber85/game_sweeper/releases) and download **GameSweep-v0.3.0.zip**.
+2. Open [GitHub Releases](https://github.com/Viber85/game_sweeper/releases) and download **GameSweep-v0.3.1.zip**.
 3. In Decky developer options, select **Install Plugin from ZIP File**, then choose the downloaded ZIP.
 4. Open GameSweep from the Decky Quick Access menu; scan your libraries.
 5. Use **Settings & updates -> Check GitHub updates** to check for and install future versions.
@@ -61,7 +61,7 @@ reviewed backup and cleanup flows.
 - The old v0.2.0 updater could not reliably install v0.2.1. If you currently have v0.2.0 installed, install v0.2.1 manually **once** from this repository's GitHub Release ZIP. Later versions can use Settings -> Check for updates -> Install update.
 - Verify on a real SteamOS device that the prompt appears, installation completes, and the newer version is shown; CI cannot test the actual Game Mode installation UI.
 
-## Safe cleanup contract (v0.3.0)
+## Safe cleanup contract (v0.3.1)
 
 - Delete individual **compatdata** or **shadercache** folders only; no bulk cleanup yet.
 - The API accepts only a registered Steam library, decimal AppID, and allowed category.
@@ -71,3 +71,9 @@ reviewed backup and cleanup flows.
 - Deletion uses a directory file descriptor and Python's symlink-attack-resistant rmtree. It refuses to proceed on platforms without the needed protection.
 - **No backup, trash, or restore option exists.** A Proton prefix can contain unique saves and settings. Close running games first.
 - Unidentified Non-Steam entries require careful manual verification; the app cannot infer ownership from AppID alone.
+
+## SteamOS HTTPS certificate fix (v0.3.1)
+
+Some SteamOS / Decky Python environments fail with `[SSL: CERTIFICATE_VERIFY_FAILED] unable to get local issuer certificate` while calling GitHub's Releases API. GameSweep v0.3.1 bundles a standard Mozilla root CA store from `certifi` (including the upstream license). Python `urllib` now explicitly verifies HTTPS certificates and hostnames against that store. The plugin NEVER disables TLS verification or accepts invalid certificates. Both GitHub update checks and Steam Store title lookups use this verified context.
+
+**Upgrading from 0.2.1 or 0.3.0:** Because the older build's HTTPS update check fails, download `GameSweep-v0.3.1.zip` and manually install via Decky once. Future releases can be checked through Settings. If the error continues after updating, inspect system date/time and local HTTPS proxy or certificate interception.

@@ -39,7 +39,7 @@ class UpdaterTests(unittest.TestCase):
 
     def test_same_version_is_not_an_update(self):
         with patch.object(updater, "_download_json", return_value=[
-            release("0.3.0"), release("0.2.1")
+            release("0.3.1"), release("0.3.0")
         ]):
             data = updater._github_update()
         self.assertFalse(data["available"])
@@ -59,6 +59,48 @@ class UpdaterTests(unittest.TestCase):
         self.assertIn('bridge.callable("utilities/install_plugin")', source)
         self.assertNotIn('import { callable, call } from "@decky/api"', source)
 
+
+
+class TLSTests(unittest.TestCase):
+    def test_uses_packaged_mozilla_roots_when_present(self):
+        """Decky may not find host CA certificates; bundle must be consulted."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import sentinel
+        with tempfile.TemporaryDirectory() as directory:
+            ca_file = Path(directory) / "cacert.pem"
+            ca_file.write_bytes(b"fake test bundle")
+            with patch.object(updater, "TRUST_BUNDLE", ca_file):
+                with patch.object(updater.ssl, "create_default_context", return_value=sentinel.ssl_context) as maker:
+                    self.assertIs(updater._https_context(), sentinel.ssl_context)
+                    maker.assert_called_once_with(cafile=str(ca_file))
+
+    def test_absent_bundle_uses_verified_system_context(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import sentinel
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "not-here.pem"
+            with patch.object(updater, "TRUST_BUNDLE", missing):
+                with patch.object(updater.ssl, "create_default_context", return_value=sentinel.ssl_context) as maker:
+                    self.assertIs(updater._https_context(), sentinel.ssl_context)
+                    maker.assert_called_once_with()
+
+    def test_download_uses_tls_context(self):
+        from unittest.mock import sentinel
+        class FakeResponse:
+            status = 200
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                return None
+            def read(self, size):
+                return b'{"success":true}'
+        with patch.object(updater, "_https_context", return_value=sentinel.ssl_context):
+            with patch.object(updater, "urlopen", return_value=FakeResponse()) as opener:
+                self.assertEqual(updater._download_json("https://api.github.com/example"), {"success": True})
+                self.assertEqual(opener.call_args.kwargs["context"], sentinel.ssl_context)
+                self.assertEqual(opener.call_args.kwargs["timeout"], 8)
 
 if __name__ == "__main__":
     unittest.main()

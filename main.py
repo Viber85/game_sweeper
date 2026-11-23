@@ -1,9 +1,10 @@
-"""GameSweep v0.3.0 Decky backend with guarded opt-in cleanup."""
+"""GameSweep v0.3.1 Decky backend with guarded opt-in cleanup."""
 from __future__ import annotations
 
 import asyncio
 import json
 import re
+import ssl
 from pathlib import Path
 from time import monotonic
 from uuid import uuid4
@@ -16,8 +17,21 @@ sys.path.insert(0, str(Path(__file__).parent))
 from scanner import read_cache, scan, write_cache
 from cleanup import CleanupError, preview_cleanup, execute_cleanup
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 REPO = "Viber85/game_sweeper"
+
+
+
+# Decky Python environments may not know the host CA trust store.
+# Ship Mozilla's trusted CA roots (certifi) and continue checking both the
+# server certificate chain AND the HTTPS hostname (no verify=False fallback).
+TRUST_BUNDLE = Path(__file__).resolve().parent / "cacert.pem"
+
+
+def _https_context() -> ssl.SSLContext:
+    if TRUST_BUNDLE.is_file():
+        return ssl.create_default_context(cafile=str(TRUST_BUNDLE))
+    return ssl.create_default_context()
 
 
 def _download_json(url: str):
@@ -25,13 +39,25 @@ def _download_json(url: str):
         "User-Agent": "GameSweep/" + VERSION,
         "Accept": "application/vnd.github+json" if "api.github.com" in url else "application/json",
     })
-    with urlopen(request, timeout=8) as response:
+    with urlopen(request, timeout=8, context=_https_context()) as response:
         if response.status != 200:
             raise RuntimeError("Server returned HTTP " + str(response.status))
         raw = response.read(2_000_001)
         if len(raw) > 2_000_000:
             raise RuntimeError("Metadata response too large")
         return json.loads(raw)
+
+
+
+def _network_error(exc: Exception) -> str:
+    reason = getattr(exc, "reason", exc)
+    if isinstance(reason, ssl.SSLCertVerificationError) or "CERTIFICATE_VERIFY_FAILED" in str(exc):
+        return (
+            "Secure connection failed while verifying GitHub/Steam. "
+            "Check SteamOS system date and time, network and HTTPS-intercepting proxies. "
+            "TLS certificate verification is never disabled."
+        )
+    return str(exc)
 
 
 def _version_key(value: str):
@@ -101,13 +127,13 @@ class Plugin:
                 return {"found": True, "name": name}
             return {"found": False, "name": ""}
         except (OSError, HTTPError, URLError, ValueError, RuntimeError) as exc:
-            return {"found": False, "name": "", "error": str(exc)}
+            return {"found": False, "name": "", "error": _network_error(exc)}
 
     async def check_update(self):
         try:
             return await asyncio.to_thread(_github_update)
         except (OSError, HTTPError, URLError, ValueError, RuntimeError) as exc:
-            return {"available": False, "version": VERSION, "url": "", "error": str(exc)}
+            return {"available": False, "version": VERSION, "url": "", "error": _network_error(exc)}
 
     async def prepare_cleanup(self, library: str, appid: str, kind: str):
         """Issue a short-lived, single-use confirmation token for one directory."""

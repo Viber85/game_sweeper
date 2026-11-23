@@ -394,7 +394,7 @@ export function GameSweepFullScreen() {
               <h1 className="gs-title">GameSweep <span style={{ color: "#6f859f" }}>/</span> {title}</h1>
               <div className="gs-subtitle">Compatdata and shader cache overview for SteamOS</div>
             </div>
-            <div className="gs-right-tag">Game Mode · v0.3.0</div>
+            <div className="gs-right-tag">Game Mode · v0.3.1</div>
           </header>
 
           {!!error && <div className="gs-note"><FaExclamationTriangle style={{ marginRight: 8 }} />{error}</div>}
@@ -524,7 +524,7 @@ export function GameSweepFullScreen() {
           {tab === "settings" && (
             <div className="gs-card gs-settings">
               <h2 style={{ marginTop: 0 }}>GameSweep</h2>
-              <p className="gs-muted">Version 0.3.0 · GitHub: Viber85/game_sweeper</p>
+              <p className="gs-muted">Version 0.3.1 · GitHub: Viber85/game_sweeper</p>
               <p className="gs-muted">Fullscreen SteamOS Game Mode interface with guarded, opt-in deletion.</p>
               <div className="gs-settings-row">
                 <div>
