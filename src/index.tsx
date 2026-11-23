@@ -27,7 +27,7 @@ type ScanData = {
 };
 type UpdateInfo = {
   available: boolean; version: string; url: string;
-  notes?: string; error?: string;
+  notes?: string; sha256?: string; error?: string;
 };
 type NameInfo = { found: boolean; name: string; error?: string };
 type Filter = "all" | "candidate" | "review" | "installed";
@@ -38,8 +38,8 @@ const resolveName = callable<[appid: string], NameInfo>("resolve_name");
 
 function formatBytes(size: number): string {
   if (size <= 0) return "0 B";
-  const exp = Math.min(Math.floor(Math.log(size) / Math.log(1024)), 3);
-  const properUnits = ["B", "MB", "GB", "TB"];
+  const exp = Math.min(Math.floor(Math.log(size) / Math.log(1024)), 4);
+  const properUnits = ["B", "KB", "MB", "GB", "TB"];
   return (size / Math.pow(1024, exp)).toFixed(exp ? 1 : 0) + " " + properUnits[exp];
 }
 
@@ -129,7 +129,7 @@ function Content() {
       // Use Decky's own installer, which displays its confirmation modal.
       // InstallType.UPDATE = 2 in decky-loader.
       await call<[string, string, string, string, number], void>(
-        "utilities/install_plugin", update.url, "GameSweep", update.version, "", 2
+        "utilities/install_plugin", update.url, "GameSweep", update.version, update.sha256 || "", 2
       );
     } catch (err) {
       setError("Update request failed: " + String(err));

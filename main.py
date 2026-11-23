@@ -54,7 +54,9 @@ def _github_update():
             if name == "GameSweep-" + tag + ".zip" and url.startswith(
                 "https://github.com/" + REPO + "/releases/download/"
             ):
-                eligible.append({"version": tag, "url": url, "notes": str(release.get("body", ""))[:800]})
+                digest = str(asset.get("digest", ""))
+                sha256 = digest[7:] if re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest) else ""
+                eligible.append({"version": tag, "url": url, "sha256": sha256, "notes": str(release.get("body", ""))[:800]})
     if eligible:
         return {"available": True, **max(eligible, key=lambda item: _version_key(item["version"]))}
     return {"available": False, "version": VERSION, "url": "", "notes": ""}
