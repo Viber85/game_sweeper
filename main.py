@@ -1,4 +1,4 @@
-"""GameSweep v0.4.0 Decky backend with guarded opt-in cleanup."""
+"""GameSweep v0.4.1 Decky backend with guarded opt-in cleanup."""
 from __future__ import annotations
 
 import asyncio
@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from scanner import read_cache, scan, write_cache
 from cleanup import CleanupError, preview_cleanup, execute_cleanup
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 REPO = "Viber85/game_sweeper"
 
 

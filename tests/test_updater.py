@@ -39,7 +39,7 @@ class UpdaterTests(unittest.TestCase):
 
     def test_same_version_is_not_an_update(self):
         with patch.object(updater, "_download_json", return_value=[
-            release("0.4.0"), release("0.3.1")
+            release("0.4.1"), release("0.3.1")
         ]):
             data = updater._github_update()
         self.assertFalse(data["available"])

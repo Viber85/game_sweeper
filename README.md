@@ -1,8 +1,8 @@
-# GameSweep v0.4.0
+# GameSweep v0.4.1
 
 GameSweep is a fullscreen Decky Loader storage manager for SteamOS Game Mode.
 
-## What's new in v0.4.0
+## What's new in v0.4.1
 
 - Selecting GameSweep from Decky's Quick Access menu **opens the fullscreen route directly**. There is no separate "Open fullscreen" button.
 - Every scan result is labelled **Steam**, **Non-Steam**, or **Unknown source**, with source filters alongside status filters.
@@ -15,7 +15,7 @@ GameSweep is a fullscreen Decky Loader storage manager for SteamOS Game Mode.
 ## Installation
 
 1. Install Decky Loader on SteamOS.
-2. Download **GameSweep-v0.4.0.zip** from [GitHub Releases](https://github.com/Viber85/game_sweeper/releases).
+2. Download **GameSweep-v0.4.1.zip** from [GitHub Releases](https://github.com/Viber85/game_sweeper/releases).
 3. In Decky developer settings, select **Install Plugin from ZIP File** and choose the downloaded release ZIP.
 4. Select GameSweep in the Decky menu; it automatically enters fullscreen.
 5. Open **Settings → Check for updates** to check GitHub Releases for future versions.
