@@ -8,6 +8,7 @@ import json
 import os
 import re
 import stat
+from shutil import disk_usage
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -218,10 +219,23 @@ def scan(home: Path, cache_file: Path) -> dict[str, Any]:
             items.append(row)
 
     items.sort(key=lambda x: (-x["bytes"], x["name"].lower()))
+    disks = []
+    for apps in libraries:
+        try:
+            usage = disk_usage(apps)
+            disks.append({
+                "library": str(apps.parent),
+                "total": usage.total,
+                "used": usage.used,
+                "free": usage.free,
+            })
+        except OSError:
+            continue
     return {
-        "version": "0.1.0",
+        "version": "0.2.0",
         "scanned_at": datetime.now(timezone.utc).isoformat(),
         "libraries": [str(path.parent) for path in libraries],
+        "disks": disks,
         "missing_libraries": missing,
         "entries": items,
         "summary": {

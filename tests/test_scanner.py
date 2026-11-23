@@ -26,6 +26,9 @@ class ScannerTests(unittest.TestCase):
         other.mkdir(parents=True)
         (other / "cache").write_bytes(b"y" * 37)
         result = scan(self.home, self.cache)
+        self.assertEqual(len(result["disks"]), 1)
+        self.assertEqual(result["disks"][0]["library"], str(self.steam))
+        self.assertGreater(result["disks"][0]["total"], 0)
         by_id = {row["id"]: row for row in result["entries"]}
         self.assertEqual(by_id["1091500"]["status"], "installed")
         self.assertEqual(by_id["1091500"]["name"], "Cyberpunk 2077")

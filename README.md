@@ -1,8 +1,10 @@
 # GameSweep
 
-Decky Loader plugin for SteamOS Game Mode. **v0.1.0 is read-only**:
+Decky Loader plugin for SteamOS Game Mode. **v0.2.0 is read-only**:
 it scans Steam compatdata and shader cache, estimates storage use, and labels
 installed games and possible leftovers. It cannot delete files.
+
+v0.2.0 opens a real full-screen SteamOS route from a button in the Decky quick access panel. The Dashboard uses the actual filesystem capacity for a selected Steam library, a circular used/free disk meter, storage summaries, and expandable game results. The UI is gamepad-focusable and pressing B returns to Steam.
 
 ## Features
 - Discover Steam libraries from Steam's libraryfolders.vdf (including microSD).
@@ -12,11 +14,11 @@ installed games and possible leftovers. It cannot delete files.
 - Mark installed games as protected, apparent leftovers as candidates (not safe to delete), and ambiguous / Non-Steam entries as needing review.
 - Detect unavailable libraries and avoid guessing when a drive is disconnected.
 - Check GitHub Releases and request updates via Decky Loader's own installer. Updates require the normal Decky confirmation prompt.
-- Gamepad-focusable Quick Access interface.
+- Fullscreen Game Mode interface launched from a compact Decky Quick Access entry. Gamepad-focusable navigation and back/exit controls.
 
 ## Install
 1. Install Decky Loader on SteamOS.
-2. Open [GitHub Releases](https://github.com/Viber85/game_sweeper/releases) and download **GameSweep-v0.1.0.zip**.
+2. Open [GitHub Releases](https://github.com/Viber85/game_sweeper/releases) and download **GameSweep-v0.2.0.zip**.
 3. In Decky developer options, select **Install Plugin from ZIP File**, then choose the downloaded ZIP.
 4. Open GameSweep from the Decky Quick Access menu; scan your libraries.
 5. Use **Settings & updates -> Check GitHub updates** to check for and install future versions.
