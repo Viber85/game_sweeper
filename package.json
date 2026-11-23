@@ -1,6 +1,6 @@
 {
   "name": "game-sweeper",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "type": "module",
   "description": "SteamOS Decky compatdata and shader cache manager with guarded cleanup",
   "repository": "https://github.com/Viber85/game_sweeper",

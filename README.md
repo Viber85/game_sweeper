@@ -1,8 +1,29 @@
-# GameSweep v0.4.1
+# GameSweep v0.5.0
 
 GameSweep is a fullscreen Decky Loader storage manager for SteamOS Game Mode.
 
-## What's new in v0.4.1
+## What's new in v0.5.0
+
+- **Full four-way controller navigation** uses Steam's native `vgp_ondirection` / `BTakeFocus` focus system: D-pad or left analog moves up/down/left/right. A selects; B exits fullscreen or dismisses the confirmation dialog. The sidebar, results and confirmation modal are navigable without touch or mouse.
+- New **Delete entire game data (prefix + shaders)** action appears when both compatdata and shader cache folders are present. Both paths and their combined estimated size are displayed in **one** irreversible-deletion confirmation. It does NOT uninstall the main game.
+- Before combined deletion, both targets are checked: owner/status, Steam libraries, running processes and stable inodes. Any mismatch rejects the operation before deleting either. A filesystem error in the second removal can leave the first deleted; GameSweep explicitly reports partial deletion and requires a rescan.
+
+### Safety of combined deletion
+
+The action permanently removes all **GameSweep-managed game data** within that Steam library for the AppID: `steamapps/compatdata/<AppID>` and `steamapps/shadercache/<AppID>`. It does not delete Steam's game installation, downloads, external Wine prefixes, Steam Cloud data or other locations. Locally saved progress in compatdata may be lost. There is no undo or backup. Close the game first.
+
+### Controller controls
+
+| Control | Action |
+|---|---|
+| D-pad or left analog ↑ ↓ ← → | Move between sidebar, filters, game rows and action buttons |
+| A | Select/activate the highlighted control |
+| B | Exit fullscreen; close confirmation dialog if open |
+| Right analog | Steam-native scrolling of long content when supported |
+
+For unsupported versions of Steam's native focus tree, the handler leaves the event to Steam's default navigation rather than swallowing inputs.
+
+## Previously available features
 
 - Selecting GameSweep from Decky's Quick Access menu **opens the fullscreen route directly**. There is no separate "Open fullscreen" button.
 - Every scan result is labelled **Steam**, **Non-Steam**, or **Unknown source**, with source filters alongside status filters.
@@ -15,7 +36,7 @@ GameSweep is a fullscreen Decky Loader storage manager for SteamOS Game Mode.
 ## Installation
 
 1. Install Decky Loader on SteamOS.
-2. Download **GameSweep-v0.4.1.zip** from [GitHub Releases](https://github.com/Viber85/game_sweeper/releases).
+2. Download **GameSweep-v0.5.0.zip** from [GitHub Releases](https://github.com/Viber85/game_sweeper/releases).
 3. In Decky developer settings, select **Install Plugin from ZIP File** and choose the downloaded release ZIP.
 4. Select GameSweep in the Decky menu; it automatically enters fullscreen.
 5. Open **Settings → Check for updates** to check GitHub Releases for future versions.

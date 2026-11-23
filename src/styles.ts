@@ -111,4 +111,12 @@ export const style = `
 .gs-type-unknown{color:#c3bdca;background:rgba(139,135,158,.12);border-color:rgba(162,163,175,.24)}
 .gs-source-filters{width:100%;display:flex;flex-wrap:wrap;gap:6px;margin-top:5px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)}
 .gs-installed-warning{font-size:13px;line-height:1.55;color:#ffe0ad;background:rgba(127,64,22,.26);border:1px solid rgba(246,164,76,.5);padding:12px 15px;border-radius:10px;margin-bottom:14px}
+
+.gs-delete-all{width:100%;flex-basis:100%;margin-top:4px;padding-top:9px;border-top:1px solid rgba(248,118,109,.22)}
+.gs-screen .gs-delete-all .DialogButton{width:100%!important;text-align:center!important;background:rgba(151,53,57,.28)!important;border:1px solid rgba(242,130,117,.53)!important;color:#ffd7cf!important;font-weight:700!important}
+.gs-screen .gs-delete-all .DialogButton:focus{outline:2px solid #ffc3aa!important}
+.gs-main{scroll-padding-bottom:70px}
+.gs-list-row-wrap{scroll-margin-bottom:70px}
+.gs-modal-layer{overscroll-behavior:contain}
+.gs-modal{scroll-padding-bottom:28px}
 `;

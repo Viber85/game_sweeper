@@ -168,3 +168,116 @@ def execute_cleanup(home: Path, cache_file: Path, preview: dict[str, Any]) -> di
         "kind": preview["kind"],
         "bytes": preview["bytes"],
     }
+
+
+def preview_all_cleanup(home: Path, cache_file: Path, library: str,
+                        appid: str, allow_installed: bool = False) -> dict[str, Any]:
+    """Preview every existing game-data directory; not the game installation."""
+    if not isinstance(allow_installed, bool):
+        raise CleanupError("Invalid installed-game authorization")
+    _validate_input(library, appid, "prefix")
+    snapshot = scan(home, cache_file)
+    if snapshot["missing_libraries"]:
+        raise CleanupError("One or more Steam libraries are offline; cleanup is disabled")
+    if library not in snapshot["libraries"]:
+        raise CleanupError("Steam library is no longer registered")
+    item = next((i for i in snapshot["entries"]
+                 if i["id"] == appid and i["library"] == library), None)
+    if item is None:
+        raise CleanupError("Game data not found in selected Steam library")
+    # A manually placed symlink with this AppID is never silently ignored.
+    # If it exists in either category, refuse combined deletion entirely.
+    for category in CATEGORIES.values():
+        candidate = Path(library) / "steamapps" / category / appid
+        if candidate.is_symlink():
+            raise CleanupError("Symbolic link game data found; cleanup refused")
+    kinds = [kind for kind in ("prefix", "shader") if item.get(kind + "_path")]
+    if not kinds:
+        raise CleanupError("No compatdata or shader cache folders found")
+
+    # Each target is independently checked; no deletion occurs during preview.
+    targets = [
+        _current_selection(home, cache_file, library, appid, kind,
+                           allow_installed=allow_installed)
+        for kind in kinds
+    ]
+    if any(target["status"] != targets[0]["status"] or
+           target["game_type"] != targets[0]["game_type"] for target in targets):
+        raise CleanupError("Inconsistent game metadata; rescan required")
+    return {
+        "library": library, "appid": appid, "kind": "all",
+        "name": targets[0]["name"], "status": targets[0]["status"],
+        "game_type": targets[0]["game_type"],
+        "type_source": targets[0]["type_source"],
+        "allow_installed": allow_installed,
+        "targets": targets,
+        "bytes": sum(target["bytes"] for target in targets),
+    }
+
+
+def _delete_pinned_target(target: dict[str, Any]) -> None:
+    """Delete the pinned directory with an fd-anchored symlink-safe rmtree."""
+    path = Path(target["target"])
+    flags = os.O_RDONLY | os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(path.parent, flags)
+    try:
+        before = os.stat(target["appid"], dir_fd=fd, follow_symlinks=False)
+        if (before.st_dev, before.st_ino) != (target["device"], target["inode"]):
+            raise CleanupError("Folder changed while preparing deletion")
+        if not stat.S_ISDIR(before.st_mode):
+            raise CleanupError("Target is no longer a directory")
+        shutil.rmtree(target["appid"], dir_fd=fd)
+    except OSError as exc:
+        raise CleanupError("Filesystem removal failed: " + str(exc)) from exc
+    finally:
+        os.close(fd)
+
+
+def execute_all_cleanup(home: Path, cache_file: Path,
+                        preview: dict[str, Any]) -> dict[str, Any]:
+    """Validate all targets before deleting; report partial failures clearly."""
+    if preview.get("kind") != "all" or not preview.get("targets"):
+        raise CleanupError("Invalid combined cleanup request")
+    if not getattr(shutil.rmtree, "avoids_symlink_attacks", False):
+        raise CleanupError("This Python platform cannot guarantee symlink-safe deletion")
+
+    # Re-check both folders, metadata, and each inode BEFORE removing either.
+    fresh = preview_all_cleanup(
+        home, cache_file, preview["library"], preview["appid"],
+        allow_installed=preview["allow_installed"],
+    )
+    previous = {item["kind"]: item for item in preview["targets"]}
+    current = {item["kind"]: item for item in fresh["targets"]}
+    if previous.keys() != current.keys():
+        raise CleanupError("Available game data changed since confirmation")
+    if fresh["status"] != preview["status"] or fresh["game_type"] != preview["game_type"]:
+        raise CleanupError("Game installation or classification changed since confirmation")
+    for kind, target in current.items():
+        earlier = previous[kind]
+        for field in ("target", "device", "inode"):
+            if target[field] != earlier[field]:
+                raise CleanupError("Game data folders changed since confirmation")
+
+    removed: list[str] = []
+    for kind in ("prefix", "shader"):
+        if kind not in current:
+            continue
+        try:
+            _delete_pinned_target(current[kind])
+            removed.append(kind)
+        except CleanupError as exc:
+            raise CleanupError(
+                "Combined cleanup incomplete: removed " +
+                (", ".join(removed) if removed else "nothing") +
+                "; could not delete " + kind + ": " + str(exc) +
+                ". Rescan to inspect remaining data."
+            ) from exc
+    return {
+        "success": True,
+        "name": preview["name"],
+        "kind": "all",
+        "removed_kinds": removed,
+        "bytes": sum(item["bytes"] for item in fresh["targets"]),
+    }

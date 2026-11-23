@@ -59,7 +59,7 @@ export const scanStorage = callable<[], ScanData>("scan_storage");
 export const checkUpdate = callable<[], UpdateInfo>("check_update");
 export const resolveName = callable<[appid: string], NameInfo>("resolve_name");
 
-export type CleanupKind = "prefix" | "shader";
+export type CleanupKind = "prefix" | "shader" | "all";
 export type CleanupPreview = {
   ok: boolean;
   error?: string;
@@ -72,6 +72,7 @@ export type CleanupPreview = {
   type_source?: string;
   bytes?: number;
   path?: string;
+  targets?: { kind: "prefix" | "shader"; path: string; bytes: number }[];
 };
 export type CleanupResult = {
   ok: boolean;
@@ -79,6 +80,7 @@ export type CleanupResult = {
   success?: boolean;
   name?: string;
   kind?: CleanupKind;
+  removed_kinds?: ("prefix" | "shader")[];
   bytes?: number;
 };
 export const prepareCleanup = callable<

@@ -1,4 +1,4 @@
-"""GameSweep v0.4.1 Decky backend with guarded opt-in cleanup."""
+"""GameSweep v0.5.0 Decky backend with guarded opt-in cleanup."""
 from __future__ import annotations
 
 import asyncio
@@ -15,9 +15,10 @@ import decky
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
 from scanner import read_cache, scan, write_cache
-from cleanup import CleanupError, preview_cleanup, execute_cleanup
+from cleanup import (CleanupError, preview_cleanup, execute_cleanup,
+                     preview_all_cleanup, execute_all_cleanup)
 
-VERSION = "0.4.1"
+VERSION = "0.5.0"
 REPO = "Viber85/game_sweeper"
 
 
@@ -144,10 +145,16 @@ class Plugin:
         """Authorize installed-game data only when explicitly requested."""
         async with self.lock:
             try:
-                selected = await asyncio.to_thread(
-                    preview_cleanup, self.home, self.cache_path, library, appid, kind,
-                    allow_installed is True
-                )
+                if kind == "all":
+                    selected = await asyncio.to_thread(
+                        preview_all_cleanup, self.home, self.cache_path,
+                        library, appid, allow_installed is True
+                    )
+                else:
+                    selected = await asyncio.to_thread(
+                        preview_cleanup, self.home, self.cache_path,
+                        library, appid, kind, allow_installed is True
+                    )
                 now = monotonic()
                 self.pending_deletions = {
                     key: value for key, value in self.pending_deletions.items()
@@ -161,7 +168,12 @@ class Plugin:
                     "status": selected["status"], "game_type": selected["game_type"],
                     "type_source": selected["type_source"],
                     "bytes": selected["bytes"],
-                    "path": selected["target"]
+                    "path": selected.get("target", ""),
+                    "targets": [
+                        {"kind": target["kind"], "path": target["target"],
+                         "bytes": target["bytes"]}
+                        for target in selected.get("targets", [])
+                    ]
                 }
             except (CleanupError, OSError, ValueError) as exc:
                 return {"ok": False, "error": str(exc)}
@@ -178,8 +190,10 @@ class Plugin:
                 return {"ok": False, "error": "Explicit installed-game confirmation required"
                         if installed else "Explicit confirmation is required"}
             try:
+                operation = (execute_all_cleanup
+                             if pending[1]["kind"] == "all" else execute_cleanup)
                 outcome = await asyncio.to_thread(
-                    execute_cleanup, self.home, self.cache_path, pending[1]
+                    operation, self.home, self.cache_path, pending[1]
                 )
                 decky.logger.info("GameSweep removed %s from %s",
                                   outcome["kind"], pending[1]["appid"])

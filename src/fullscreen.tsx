@@ -12,6 +12,7 @@ import {
 } from "./api";
 import type { Disk, Entry, Filter, ScanData, Tab, UpdateInfo, CleanupPreview, CleanupKind, GameType } from "./api";
 import { style } from "./styles";
+import { useGameSweepGamepadFocus, focusGameSweepFirstButton } from "./focus";
 
 const TABS: Array<{ id: Tab; label: string; icon: ReactNode }> = [
   { id: "overview", label: "Overview", icon: <FaHome /> },
@@ -148,6 +149,14 @@ function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows, 
                         Delete shader cache…
                       </ButtonItem>
                     )}
+                    {!!entry.prefix_path && !!entry.shader_path && (
+                      <div className="gs-delete-all">
+                        <ButtonItem layout="below" disabled={cleanupBusy}
+                          onClick={() => onDelete(entry, "all")}>
+                          Delete entire game data (prefix + shaders)…
+                        </ButtonItem>
+                      </div>
+                    )}
                 </div>
                 {entry.name_source === "unknown" && entry.status !== "review" && (
                   <div className="gs-action">
@@ -196,6 +205,7 @@ export function GameSweepFullScreen() {
   const [error, setError] = useState("");
   const scanPending = useRef(false);
   const navRef = useRef<HTMLDivElement>(null);
+  const screenRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const [deletePreview, setDeletePreview] = useState<CleanupPreview | null>(null);
   const [deleteAcknowledged, setDeleteAcknowledged] = useState(false);
@@ -203,6 +213,7 @@ export function GameSweepFullScreen() {
   const [deleting, setDeleting] = useState(false);
   const [cleanupPreparing, setCleanupPreparing] = useState(false);
   const [cleanupNotice, setCleanupNotice] = useState("");
+  useGameSweepGamepadFocus(screenRef, deletePreview !== null);
 
   const refresh = useCallback(async () => {
     if (scanPending.current) return;
@@ -226,8 +237,9 @@ export function GameSweepFullScreen() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const node = navRef.current?.querySelector<HTMLElement>(".DialogButton");
-      node?.focus();
+      if (screenRef.current) {
+        focusGameSweepFirstButton(screenRef.current, ".gs-nav .DialogButton");
+      }
     }, 180);
     return () => window.clearTimeout(timer);
   }, []);
@@ -235,7 +247,9 @@ export function GameSweepFullScreen() {
   useEffect(() => {
     if (!deletePreview) return;
     const timer = window.setTimeout(() => {
-      dialogRef.current?.querySelector<HTMLElement>(".DialogButton")?.focus();
+      if (screenRef.current) {
+        focusGameSweepFirstButton(screenRef.current, ".gs-modal .DialogButton");
+      }
     }, 80);
     return () => window.clearTimeout(timer);
   }, [deletePreview]);
@@ -339,7 +353,8 @@ export function GameSweepFullScreen() {
         return;
       }
       setCleanupNotice(
-        "Removed " + (result.kind === "prefix" ? "compatdata" : "shader cache") +
+        "Removed " + (result.kind === "all" ? "compatdata + shader cache" :
+          result.kind === "prefix" ? "compatdata" : "shader cache") +
         " for " + (result.name || deletePreview.name || deletePreview.appid) +
         " (" + bytes(result.bytes || 0) + " estimated)."
       );
@@ -393,7 +408,7 @@ export function GameSweepFullScreen() {
       else exitFullscreen();
     }} style={{ width: "100%", height: "100%", minHeight: 0 }}>
       <style>{style}</style>
-      <div className="gs-screen">
+      <div className="gs-screen" ref={screenRef}>
         <aside className="gs-sidebar">
           <div className="gs-brand">
             <FaBroom className="gs-brand-icon" />GameSweep
@@ -424,7 +439,7 @@ export function GameSweepFullScreen() {
               <h1 className="gs-title">GameSweep <span style={{ color: "#6f859f" }}>/</span> {title}</h1>
               <div className="gs-subtitle">Compatdata and shader cache overview for SteamOS</div>
             </div>
-            <div className="gs-right-tag">Game Mode · v0.4.1</div>
+            <div className="gs-right-tag">Game Mode · v0.5.0</div>
           </header>
 
           {!!error && <div className="gs-note"><FaExclamationTriangle style={{ marginRight: 8 }} />{error}</div>}
@@ -555,7 +570,7 @@ export function GameSweepFullScreen() {
           {tab === "settings" && (
             <div className="gs-card gs-settings">
               <h2 style={{ marginTop: 0 }}>GameSweep</h2>
-              <p className="gs-muted">Version 0.4.1 · GitHub: Viber85/game_sweeper</p>
+              <p className="gs-muted">Version 0.5.0 · GitHub: Viber85/game_sweeper</p>
               <p className="gs-muted">Fullscreen SteamOS storage manager. Installed-game data removal requires two acknowledgments.</p>
               <div className="gs-settings-row">
                 <div>
@@ -606,8 +621,10 @@ export function GameSweepFullScreen() {
               <div className="gs-modal-symbol"><FaExclamationTriangle /></div>
               <h2>Confirm permanent deletion</h2>
               <p className="gs-modal-subtitle">
-                This removes only the selected compatdata or shader cache folder.
-                It does not uninstall the game. No backup or undo is available.
+                {deletePreview.kind === "all" ?
+                  "This removes BOTH the Proton prefix (compatdata) and shader cache for this game." :
+                  "This removes only the selected compatdata or shader cache folder."}
+                {" "}It does not uninstall the game. No backup or undo is available.
               </p>
               {deletePreview.status === "installed" && (
                 <div className="gs-installed-warning">
@@ -626,13 +643,23 @@ export function GameSweepFullScreen() {
                   {" · "}Status: {deletePreview.status === "installed" ? "Installed" : "Not confirmed installed"}
                 </span>
                 <span>
-                  {deletePreview.kind === "prefix" ? "Proton compatdata" : "Shader cache"}
+                  {deletePreview.kind === "all" ? "Complete game data (prefix + shader cache)" :
+                    deletePreview.kind === "prefix" ? "Proton compatdata" : "Shader cache"}
                   {" · "}{bytes(deletePreview.bytes || 0)}
                 </span>
-                <span style={{ overflowWrap: "anywhere" }}>{deletePreview.path}</span>
+                {deletePreview.kind === "all" ? (
+                  (deletePreview.targets || []).map(target => (
+                    <span key={target.kind} style={{ overflowWrap: "anywhere" }}>
+                      {target.kind === "prefix" ? "Compatdata" : "Shader cache"}
+                      {" · "}{bytes(target.bytes)} — {target.path}
+                    </span>
+                  ))
+                ) : <span style={{ overflowWrap: "anywhere" }}>{deletePreview.path}</span>}
               </div>
               <div className="gs-modal-warning">
-                {deletePreview.kind === "prefix" ?
+                {deletePreview.kind === "all" ?
+                  "Both directories will be permanently deleted. Local save files and settings inside the prefix can be lost. If deletion fails halfway through, one directory may already be gone." :
+                  deletePreview.kind === "prefix" ?
                   "Compatdata can contain save files, configurations, and launcher data. Deleting it can permanently erase progress." :
                   "Shader caches must be regenerated. Loading may be slower or stutter initially."}
                 {deletePreview.status === "review" &&
