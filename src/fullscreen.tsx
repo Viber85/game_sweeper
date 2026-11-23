@@ -164,6 +164,7 @@ export function GameSweepFullScreen() {
   const [lookupBusy, setLookupBusy] = useState("");
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateRequestSent, setUpdateRequestSent] = useState(false);
   const [error, setError] = useState("");
   const scanPending = useRef(false);
   const navRef = useRef<HTMLDivElement>(null);
@@ -229,6 +230,7 @@ export function GameSweepFullScreen() {
   async function findUpdate() {
     setError("");
     setUpdateBusy(true);
+    setUpdateRequestSent(false);
     try {
       const info = await checkUpdate();
       setUpdateInfo(info);
@@ -244,8 +246,10 @@ export function GameSweepFullScreen() {
     if (!updateInfo?.available) return;
     setError("");
     setUpdateBusy(true);
+    setUpdateRequestSent(false);
     try {
       await requestDeckyUpdate(updateInfo);
+      setUpdateRequestSent(true);
     } catch (e) {
       setError("Decky update request failed: " + String(e));
     } finally {
@@ -307,7 +311,7 @@ export function GameSweepFullScreen() {
               <h1 className="gs-title">GameSweep <span style={{ color: "#6f859f" }}>/</span> {title}</h1>
               <div className="gs-subtitle">Compatdata and shader cache overview for SteamOS</div>
             </div>
-            <div className="gs-right-tag">Game Mode · v0.2.0</div>
+            <div className="gs-right-tag">Game Mode · v0.2.1</div>
           </header>
 
           {!!error && <div className="gs-note"><FaExclamationTriangle style={{ marginRight: 8 }} />{error}</div>}
@@ -432,7 +436,7 @@ export function GameSweepFullScreen() {
           {tab === "settings" && (
             <div className="gs-card gs-settings">
               <h2 style={{ marginTop: 0 }}>GameSweep</h2>
-              <p className="gs-muted">Version 0.2.0 · GitHub: Viber85/game_sweeper</p>
+              <p className="gs-muted">Version 0.2.1 · GitHub: Viber85/game_sweeper</p>
               <p className="gs-muted">Fullscreen SteamOS Game Mode interface. No cleanup operations are enabled.</p>
               <div className="gs-settings-row">
                 <div>
@@ -443,6 +447,12 @@ export function GameSweepFullScreen() {
                   <FaSyncAlt style={{ marginRight: 7 }} />{updateBusy ? "Checking..." : "Check for updates"}
                 </ButtonItem>
               </div>
+              {updateRequestSent && (
+                <div className="gs-muted" style={{ padding: "12px 0", color: "#80d1b2" }}>
+                  Update request sent to Decky Loader. Approve the installation in Decky's confirmation dialog.
+                  This message does not confirm installation is complete.
+                </div>
+              )}
               {updateInfo && (
                 <div className="gs-settings-row">
                   <span className="gs-muted">{updateInfo.error ? "Failed: " + updateInfo.error :

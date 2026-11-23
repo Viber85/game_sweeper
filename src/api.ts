@@ -1,4 +1,4 @@
-import { callable, call } from "@decky/api";
+import { callable } from "@decky/api";
 
 export type Status = "installed" | "candidate" | "review";
 export type Tab = "overview" | "libraries" | "results" | "review" | "settings";
@@ -56,11 +56,25 @@ export const scanStorage = callable<[], ScanData>("scan_storage");
 export const checkUpdate = callable<[], UpdateInfo>("check_update");
 export const resolveName = callable<[appid: string], NameInfo>("resolve_name");
 
+/** Decky Loader's global installer route (not @decky/api's plugin-scoped call). */
+type InstallerBridge = {
+  callable: (route: string) => (...args: unknown[]) => Promise<unknown>;
+};
+
 export async function requestDeckyUpdate(info: UpdateInfo): Promise<void> {
   if (!info.available || !info.url) throw new Error("No update available");
-  // Delegate installation and user confirmation to Decky Loader.
-  await call<[string, string, string, string, number], unknown>(
-    "utilities/install_plugin",
+  const bridge = (window as Window & { DeckyBackend?: InstallerBridge }).DeckyBackend;
+  if (typeof bridge?.callable !== "function") {
+    throw new Error(
+      "Decky's installer API is not available on this Loader version. " +
+      "Use Decky's 'Install Plugin from URL' option with the release ZIP."
+    );
+  }
+
+  // This queues Decky's confirmation prompt. Only the Loader can replace
+  // the currently running plugin (and reload it after user confirmation).
+  // Decky Loader: PluginInstallType.UPDATE = 2.
+  await bridge.callable("utilities/install_plugin")(
     info.url,
     "GameSweep",
     info.version,

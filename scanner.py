@@ -232,7 +232,7 @@ def scan(home: Path, cache_file: Path) -> dict[str, Any]:
         except OSError:
             continue
     return {
-        "version": "0.2.0",
+        "version": "0.2.1",
         "scanned_at": datetime.now(timezone.utc).isoformat(),
         "libraries": [str(path.parent) for path in libraries],
         "disks": disks,

@@ -1,4 +1,4 @@
-"""GameSweep v0.2.0 Decky backend. Read-only for Steam storage."""
+"""GameSweep v0.2.1 Decky backend. Read-only for Steam storage."""
 from __future__ import annotations
 
 import asyncio
@@ -13,7 +13,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 from scanner import read_cache, scan, write_cache
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 REPO = "Viber85/game_sweeper"
 
 
