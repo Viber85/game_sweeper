@@ -1,10 +1,12 @@
-"""GameSweep v0.2.1 Decky backend. Read-only for Steam storage."""
+"""GameSweep v0.3.0 Decky backend with guarded opt-in cleanup."""
 from __future__ import annotations
 
 import asyncio
 import json
 import re
 from pathlib import Path
+from time import monotonic
+from uuid import uuid4
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -12,8 +14,9 @@ import decky
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
 from scanner import read_cache, scan, write_cache
+from cleanup import CleanupError, preview_cleanup, execute_cleanup
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 REPO = "Viber85/game_sweeper"
 
 
@@ -80,7 +83,8 @@ class Plugin:
         self.home = Path(decky.DECKY_USER_HOME)
         self.cache_path = Path(decky.DECKY_PLUGIN_SETTINGS_DIR) / "known_titles.json"
         self.lock = asyncio.Lock()
-        decky.logger.info("GameSweep %s ready (read-only)", VERSION)
+        self.pending_deletions = {}
+        decky.logger.info("GameSweep %s ready (guarded cleanup)", VERSION)
 
     async def scan_storage(self):
         async with self.lock:
@@ -105,5 +109,47 @@ class Plugin:
         except (OSError, HTTPError, URLError, ValueError, RuntimeError) as exc:
             return {"available": False, "version": VERSION, "url": "", "error": str(exc)}
 
+    async def prepare_cleanup(self, library: str, appid: str, kind: str):
+        """Issue a short-lived, single-use confirmation token for one directory."""
+        async with self.lock:
+            try:
+                selected = await asyncio.to_thread(
+                    preview_cleanup, self.home, self.cache_path, library, appid, kind
+                )
+                now = monotonic()
+                self.pending_deletions = {
+                    key: value for key, value in self.pending_deletions.items()
+                    if now - value[0] < 120
+                }
+                token = uuid4().hex
+                self.pending_deletions[token] = (now, selected)
+                return {
+                    "ok": True, "token": token, "name": selected["name"],
+                    "appid": selected["appid"], "kind": selected["kind"],
+                    "status": selected["status"], "bytes": selected["bytes"],
+                    "path": selected["target"]
+                }
+            except (CleanupError, OSError, ValueError) as exc:
+                return {"ok": False, "error": str(exc)}
+
+    async def delete_storage(self, token: str, confirmation: str):
+        """Permanently remove exactly the previewed folder after explicit consent."""
+        if confirmation != "PERMANENT_DELETE":
+            return {"ok": False, "error": "Explicit confirmation is required"}
+        async with self.lock:
+            pending = self.pending_deletions.pop(token, None)
+            if not pending or monotonic() - pending[0] > 120:
+                return {"ok": False, "error": "Confirmation expired; preview again"}
+            try:
+                outcome = await asyncio.to_thread(
+                    execute_cleanup, self.home, self.cache_path, pending[1]
+                )
+                decky.logger.info("GameSweep removed %s from %s",
+                                  outcome["kind"], pending[1]["appid"])
+                return {"ok": True, **outcome}
+            except (CleanupError, OSError, ValueError) as exc:
+                decky.logger.warning("Cleanup refused or failed: %s", exc)
+                return {"ok": False, "error": str(exc)}
+
     async def _unload(self):
-        pass
+        self.pending_deletions.clear()

@@ -85,4 +85,22 @@ export const style = `
 .gs-loading{padding:30px;text-align:center;color:#abc4d7}
 @media(max-width:1120px){.gs-sidebar{width:170px;flex-basis:170px}.gs-brand{font-size:18px}.gs-main{padding:19px}.gs-overview{grid-template-columns:minmax(215px,.9fr) minmax(0,1.2fr)}.gs-metric{padding:11px}.gs-metric-value{font-size:18px}.gs-meter{width:190px;height:190px}.gs-meter-card{min-height:258px}}
 @media(max-width:850px){.gs-sidebar{width:142px;flex-basis:142px;padding:18px 7px}.gs-nav-label{gap:6px;font-size:11px}.gs-brand{font-size:15px;padding:3px 5px 20px}.gs-main{padding:16px}.gs-overview{grid-template-columns:1fr}.gs-meter-card{min-height:240px}.gs-metrics{grid-template-rows:auto}.gs-list-heading,.gs-list-row{grid-template-columns:minmax(0,2fr) 82px 100px 69px;gap:5px}.gs-col-text{font-size:10px}}
+
+.gs-delete-row{margin-top:12px;gap:8px}
+.gs-screen .gs-delete-row .DialogButton{background:rgba(150,55,58,.24)!important;border:1px solid rgba(236,105,106,.38)!important;color:#ffc7bd!important;padding:8px 13px!important}
+.gs-cleanup-success{font-size:12px;margin:10px 0 15px;padding:12px 15px;border:1px solid rgba(87,209,169,.36);border-radius:10px;color:#8ef2bf;background:rgba(33,105,87,.16)}
+.gs-modal-layer{position:fixed;inset:0;z-index:9999;background:rgba(3,8,17,.83);backdrop-filter:blur(9px);display:flex;justify-content:center;align-items:center;padding:25px}
+.gs-modal{background:linear-gradient(140deg,#1b2d3d,#0d1c2e);border:1px solid rgba(240,144,130,.26);box-shadow:0 28px 90px rgba(0,0,0,.52);border-radius:18px;width:min(625px,100%);max-height:94vh;overflow-y:auto;padding:25px 30px;color:#eef6ff}
+.gs-modal-symbol{font-size:22px;color:#ffc06d;margin-bottom:8px}
+.gs-modal h2{font-size:23px;line-height:1.2;letter-spacing:-.5px;margin:0 0 6px}
+.gs-modal-subtitle{font-size:13px;color:#fbbaa9;margin:0 0 17px}
+.gs-modal-details{display:flex;flex-direction:column;gap:6px;padding:15px;border:1px solid rgba(206,225,255,.12);border-radius:10px;background:rgba(9,16,28,.72);color:#acc2d5;font-size:12px}
+.gs-modal-details strong{font-size:17px;color:#f3f8ff}
+.gs-modal-warning{margin:14px 0;color:#f6c49d;font-size:13px;line-height:1.55}
+.gs-modal-action{display:flex;flex-direction:column;gap:8px}
+.gs-modal-action>.DialogButton,.gs-modal-action>div>.DialogButton{width:100%!important;text-align:center!important;padding:11px!important}
+.gs-modal-action>.DialogButton{background:rgba(64,85,108,.4)!important;color:#f5f9ff!important}
+.gs-delete-button .DialogButton{background:linear-gradient(120deg,#b44b54,#cf6863)!important;color:white!important;font-weight:700!important}
+.gs-delete-button .DialogButton:disabled{opacity:.38!important}
+@media (max-height:660px){.gs-modal{padding:15px 20px}.gs-modal-details{padding:10px}.gs-modal-warning{font-size:11px;margin:9px 0}}
 `;

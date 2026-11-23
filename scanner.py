@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from shortcuts import collect_shortcuts
+
 VALUE = re.compile(r'"([^"\\]+)"\s+"((?:\\.|[^"\\])*)"')
 MAX_CACHE_ENTRIES = 30000
 
@@ -157,9 +159,13 @@ def directory_bytes(folder: Path) -> int:
 def scan(home: Path, cache_file: Path) -> dict[str, Any]:
     libraries, missing = discover_libraries(home)
     installed = manifests(libraries)
+    active_shortcuts, older_shortcuts = collect_shortcuts(steam_roots(home))
     titles = read_cache(cache_file)
     changed = False
-    for appid, name in installed.items():
+    # Save discovered names even after future shortcut removal.
+    # Backups can recover labels but never prove a game is installed.
+    known = {**older_shortcuts, **active_shortcuts, **installed}
+    for appid, name in known.items():
         if name and titles.get(appid) != name:
             titles[appid] = name
             changed = True
@@ -201,20 +207,35 @@ def scan(home: Path, cache_file: Path) -> dict[str, Any]:
             if has_manifest:
                 status = "installed"
                 reason = "Steam installation manifest found"
+            elif appid in active_shortcuts:
+                status = "installed"
+                reason = "Active Non-Steam shortcut found in Steam userdata; protect this prefix"
             elif missing:
                 status = "review"
                 reason = "A Steam library is unavailable; cannot verify install status"
             elif uncertain_id:
                 status = "review"
-                reason = "Possibly a Non-Steam shortcut or custom AppID"
+                reason = (
+                    "Title recovered from an older shortcut backup; verify before cleanup"
+                    if appid in older_shortcuts else
+                    "Possibly a removed Non-Steam shortcut or custom AppID; cannot identify from the number alone"
+                )
             else:
                 status = "candidate"
                 reason = "No installed Steam manifest found; verify before any cleanup"
             row["status"] = status
             row["reason"] = reason
-            row["name"] = installed.get(appid) or titles.get(appid) or ("Unknown game (" + appid + ")")
-            row["name_source"] = ("manifest" if installed.get(appid) else
-                                  "cache" if titles.get(appid) else "unknown")
+            row["name"] = (
+                installed.get(appid) or active_shortcuts.get(appid) or
+                older_shortcuts.get(appid) or titles.get(appid) or
+                ("Unknown game (" + appid + ")")
+            )
+            row["name_source"] = (
+                "manifest" if installed.get(appid) else
+                "shortcut" if active_shortcuts.get(appid) else
+                "backup" if older_shortcuts.get(appid) else
+                "cache" if titles.get(appid) else "unknown"
+            )
             row["bytes"] = row["prefix_bytes"] + row["shader_bytes"]
             items.append(row)
 
@@ -232,7 +253,7 @@ def scan(home: Path, cache_file: Path) -> dict[str, Any]:
         except OSError:
             continue
     return {
-        "version": "0.2.1",
+        "version": "0.2.2",
         "scanned_at": datetime.now(timezone.utc).isoformat(),
         "libraries": [str(path.parent) for path in libraries],
         "disks": disks,

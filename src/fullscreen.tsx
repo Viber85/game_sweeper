@@ -7,9 +7,10 @@ import {
   FaList, FaSearch, FaShieldAlt, FaSyncAlt
 } from "react-icons/fa";
 import {
-  bytes, checkUpdate, requestDeckyUpdate, resolveName, scanStorage
+  bytes, checkUpdate, requestDeckyUpdate, resolveName, scanStorage,
+  prepareCleanup, deleteStorage
 } from "./api";
-import type { Disk, Entry, Filter, ScanData, Tab, UpdateInfo } from "./api";
+import type { Disk, Entry, Filter, ScanData, Tab, UpdateInfo, CleanupPreview, CleanupKind } from "./api";
 import { style } from "./styles";
 
 const TABS: Array<{ id: Tab; label: string; icon: ReactNode }> = [
@@ -74,13 +75,15 @@ function StatusPill({ status }: { status: Entry["status"] }) {
   return <span className={"gs-status " + status}>{label}</span>;
 }
 
-function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows }: {
+function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows, onDelete, cleanupBusy }: {
   entries: Entry[];
   selected: string;
   onSelect: (key: string) => void;
   onLookup: (id: string) => void;
   lookupBusy: string;
-  maxRows?: number
+  maxRows?: number;
+  onDelete: (entry: Entry, kind: CleanupKind) => void;
+  cleanupBusy: boolean;
 }) {
   const showing = maxRows ? entries.slice(0, maxRows) : entries;
   return (
@@ -122,6 +125,22 @@ function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows }
                 {!!entry.prefix_path && <div>Compatdata path: {entry.prefix_path}</div>}
                 {!!entry.shader_path && <div>Shader path: {entry.shader_path}</div>}
                 <div>Title source: {entry.name_source}</div>
+                {entry.status !== "installed" && (
+                  <div className="gs-action gs-delete-row">
+                    {!!entry.prefix_path && (
+                      <ButtonItem layout="below" disabled={cleanupBusy}
+                        onClick={() => onDelete(entry, "prefix")}>
+                        Delete compatdata…
+                      </ButtonItem>
+                    )}
+                    {!!entry.shader_path && (
+                      <ButtonItem layout="below" disabled={cleanupBusy}
+                        onClick={() => onDelete(entry, "shader")}>
+                        Delete shader cache…
+                      </ButtonItem>
+                    )}
+                  </div>
+                )
                 {entry.name_source === "unknown" && entry.status !== "review" && (
                   <div className="gs-action">
                     <ButtonItem layout="below"
@@ -168,6 +187,12 @@ export function GameSweepFullScreen() {
   const [error, setError] = useState("");
   const scanPending = useRef(false);
   const navRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [deletePreview, setDeletePreview] = useState<CleanupPreview | null>(null);
+  const [deleteAcknowledged, setDeleteAcknowledged] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [cleanupPreparing, setCleanupPreparing] = useState(false);
+  const [cleanupNotice, setCleanupNotice] = useState("");
 
   const refresh = useCallback(async () => {
     if (scanPending.current) return;
@@ -196,6 +221,14 @@ export function GameSweepFullScreen() {
     }, 180);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (!deletePreview) return;
+    const timer = window.setTimeout(() => {
+      dialogRef.current?.querySelector<HTMLElement>(".DialogButton")?.focus();
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [deletePreview]);
 
   const disk = useMemo(
     () => data?.disks?.find(d => d.library === diskId) || data?.disks?.[0],
@@ -257,6 +290,53 @@ export function GameSweepFullScreen() {
     }
   }
 
+  async function requestDeletion(entry: Entry, kind: CleanupKind) {
+    if (entry.status === "installed" || cleanupPreparing || deleting) return;
+    setCleanupNotice("");
+    setError("");
+    setCleanupPreparing(true);
+    try {
+      const result = await prepareCleanup(entry.library, entry.id, kind);
+      if (!result.ok || !result.token) {
+        setError("Delete refused: " + (result.error || "Unable to verify the folder"));
+        return;
+      }
+      setDeleteAcknowledged(false);
+      setDeletePreview(result);
+    } catch (e) {
+      setError("Delete preview failed: " + String(e));
+    } finally {
+      setCleanupPreparing(false);
+    }
+  }
+
+  async function confirmDeletion() {
+    if (!deletePreview?.token || !deleteAcknowledged || deleting) return;
+    setDeleting(true);
+    setError("");
+    try {
+      const result = await deleteStorage(deletePreview.token, "PERMANENT_DELETE");
+      if (!result.ok || !result.success) {
+        setError("Cleanup failed: " + (result.error || "Unknown error"));
+        setDeletePreview(null);
+        return;
+      }
+      setCleanupNotice(
+        "Removed " + (result.kind === "prefix" ? "compatdata" : "shader cache") +
+        " for " + (result.name || deletePreview.name || deletePreview.appid) +
+        " (" + bytes(result.bytes || 0) + " estimated)."
+      );
+      setDeletePreview(null);
+      setSelected("");
+      await refresh();
+    } catch (e) {
+      setError("Cleanup failed: " + String(e));
+      setDeletePreview(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const title = tab === "overview" ? "Storage Overview" :
     tab === "libraries" ? "Steam Libraries" :
     tab === "results" ? "Scan Results" :
@@ -278,7 +358,10 @@ export function GameSweepFullScreen() {
   );
 
   return (
-    <Focusable onCancelButton={exitFullscreen} style={{ width: "100%", height: "100%", minHeight: 0 }}>
+    <Focusable onCancelButton={() => {
+      if (deletePreview) setDeletePreview(null);
+      else exitFullscreen();
+    }} style={{ width: "100%", height: "100%", minHeight: 0 }}>
       <style>{style}</style>
       <div className="gs-screen">
         <aside className="gs-sidebar">
@@ -299,7 +382,7 @@ export function GameSweepFullScreen() {
             ))}
           </div>
           <div className="gs-sidebar-bottom">
-            <div style={{ marginBottom: 10 }}>Game Mode · Read-only Preview</div>
+            <div style={{ marginBottom: 10 }}>Game Mode · Storage Manager</div>
             <ButtonItem layout="below" onClick={exitFullscreen}>
               <FaArrowLeft style={{ marginRight: 6 }} />Exit fullscreen
             </ButtonItem>
@@ -311,10 +394,11 @@ export function GameSweepFullScreen() {
               <h1 className="gs-title">GameSweep <span style={{ color: "#6f859f" }}>/</span> {title}</h1>
               <div className="gs-subtitle">Compatdata and shader cache overview for SteamOS</div>
             </div>
-            <div className="gs-right-tag">Game Mode · v0.2.1</div>
+            <div className="gs-right-tag">Game Mode · v0.3.0</div>
           </header>
 
           {!!error && <div className="gs-note"><FaExclamationTriangle style={{ marginRight: 8 }} />{error}</div>}
+          {!!cleanupNotice && <div className="gs-cleanup-success">{cleanupNotice}</div>}
           {!!data?.missing_libraries?.length && (
             <div className="gs-note">
               {data.missing_libraries.length} Steam library path(s) are unavailable.
@@ -363,7 +447,8 @@ export function GameSweepFullScreen() {
                 </div>
                 {filterBar}
                 <ItemList entries={filtered} selected={selected} onSelect={setSelected}
-                  lookupBusy={lookupBusy} onLookup={(id) => { void nameLookup(id); }} maxRows={6} />
+                  lookupBusy={lookupBusy} onLookup={(id) => { void nameLookup(id); }} maxRows={6}
+                  cleanupBusy={cleanupPreparing || deleting} onDelete={(e, k) => { void requestDeletion(e, k); }} />
               </section>
             </>
           )}
@@ -403,7 +488,8 @@ export function GameSweepFullScreen() {
               </div>
               {filterBar}
               <ItemList entries={filtered} selected={selected} onSelect={setSelected}
-                lookupBusy={lookupBusy} onLookup={(id) => { void nameLookup(id); }} />
+                lookupBusy={lookupBusy} onLookup={(id) => { void nameLookup(id); }}
+                cleanupBusy={cleanupPreparing || deleting} onDelete={(e, k) => { void requestDeletion(e, k); }} />
               <div className="gs-action">
                 <ButtonItem layout="below" disabled={busy} onClick={() => { void refresh(); }}>
                   <FaSyncAlt style={{ marginRight: 7 }} />{busy ? "Scanning..." : "Scan again"}
@@ -416,8 +502,9 @@ export function GameSweepFullScreen() {
             <>
               <div className="gs-note">
                 <FaShieldAlt style={{ marginRight: 8 }} />
-                No deletion in this release. A missing manifest does not establish a safe cleanup target;
-                Proton prefixes may contain unique saves and settings.
+                Cleanup is permanent. A missing manifest is not proof that a folder is safe to delete.
+                Open an entry and choose compatdata or shader cache to review the confirmation.
+                Close running games first. Proton prefixes may contain unique saves.
               </div>
               <section className="gs-card gs-section">
                 <div className="gs-section-heading">
@@ -428,7 +515,8 @@ export function GameSweepFullScreen() {
                 </div>
                 <ItemList entries={allEntries.filter(item => item.status !== "installed")}
                   selected={selected} onSelect={setSelected}
-                  lookupBusy={lookupBusy} onLookup={(id) => { void nameLookup(id); }} />
+                  lookupBusy={lookupBusy} onLookup={(id) => { void nameLookup(id); }}
+                cleanupBusy={cleanupPreparing || deleting} onDelete={(e, k) => { void requestDeletion(e, k); }} />
               </section>
             </>
           )}
@@ -436,8 +524,8 @@ export function GameSweepFullScreen() {
           {tab === "settings" && (
             <div className="gs-card gs-settings">
               <h2 style={{ marginTop: 0 }}>GameSweep</h2>
-              <p className="gs-muted">Version 0.2.1 · GitHub: Viber85/game_sweeper</p>
-              <p className="gs-muted">Fullscreen SteamOS Game Mode interface. No cleanup operations are enabled.</p>
+              <p className="gs-muted">Version 0.3.0 · GitHub: Viber85/game_sweeper</p>
+              <p className="gs-muted">Fullscreen SteamOS Game Mode interface with guarded, opt-in deletion.</p>
               <div className="gs-settings-row">
                 <div>
                   <strong>GitHub updates</strong>
@@ -474,13 +562,56 @@ export function GameSweepFullScreen() {
                 </ButtonItem>
               </div>
               <div className="gs-note" style={{ marginTop: 20 }}>
-                The current version cannot delete, move, or back up game data.
+                Deletion is permanent. No backup or undo is available. Verify the game and save files first.
               </div>
             </div>
           )}
 
           {busy && !data && <div className="gs-loading">Scanning Steam libraries…</div>}
         </main>
+        {deletePreview && (
+          <div className="gs-modal-layer" role="dialog" aria-modal="true" aria-label="Confirm permanent deletion">
+            <div className="gs-modal" ref={dialogRef}>
+              <div className="gs-modal-symbol"><FaExclamationTriangle /></div>
+              <h2>Confirm permanent deletion</h2>
+              <p className="gs-modal-subtitle">
+                This operation cannot be undone. No backup is created.
+              </p>
+              <div className="gs-modal-details">
+                <strong>{deletePreview.name || "Unknown game"}</strong>
+                <span>AppID {deletePreview.appid}</span>
+                <span>
+                  {deletePreview.kind === "prefix" ? "Proton compatdata" : "Shader cache"}
+                  {" · "}{bytes(deletePreview.bytes || 0)}
+                </span>
+                <span style={{ overflowWrap: "anywhere" }}>{deletePreview.path}</span>
+              </div>
+              <div className="gs-modal-warning">
+                {deletePreview.kind === "prefix" ?
+                  "Compatdata can contain save files, configurations, and launcher data. Deleting it can permanently erase progress." :
+                  "Shader caches must be regenerated. Loading may be slower or stutter initially."}
+                {deletePreview.status === "review" &&
+                  " This may be a removed Non-Steam game, and its identity or ownership cannot be verified."}
+              </div>
+              <div className="gs-modal-action">
+                <ButtonItem layout="below" disabled={deleting}
+                  onClick={() => { setDeletePreview(null); setDeleteAcknowledged(false); }}>
+                  Cancel
+                </ButtonItem>
+                <ButtonItem layout="below" disabled={deleting}
+                  onClick={() => setDeleteAcknowledged(!deleteAcknowledged)}>
+                  {deleteAcknowledged ? "✓ I understand permanent data loss" : "□ I understand permanent data loss"}
+                </ButtonItem>
+                <div className="gs-delete-button">
+                  <ButtonItem layout="below" disabled={!deleteAcknowledged || deleting}
+                    onClick={() => { void confirmDeletion(); }}>
+                    {deleting ? "Deleting…" : "Delete permanently"}
+                  </ButtonItem>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Focusable>
   );

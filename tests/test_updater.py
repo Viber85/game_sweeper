@@ -30,24 +30,24 @@ def release(version, filename=None, draft=False):
 class UpdaterTests(unittest.TestCase):
     def test_newer_release_is_detected(self):
         with patch.object(updater, "_download_json", return_value=[
-            release("0.2.0"), release("0.2.2"), release("0.2.1")
+            release("0.2.1"), release("0.3.2"), release("0.3.1")
         ]):
             data = updater._github_update()
         self.assertTrue(data["available"])
-        self.assertEqual(data["version"], "v0.2.2")
+        self.assertEqual(data["version"], "v0.3.2")
         self.assertEqual(data["sha256"], "a" * 64)
 
     def test_same_version_is_not_an_update(self):
         with patch.object(updater, "_download_json", return_value=[
-            release("0.2.1"), release("0.2.0")
+            release("0.3.0"), release("0.2.1")
         ]):
             data = updater._github_update()
         self.assertFalse(data["available"])
 
     def test_wrong_asset_or_draft_is_rejected(self):
         with patch.object(updater, "_download_json", return_value=[
-            release("0.2.5", filename="Source-code.zip"),
-            release("0.2.6", draft=True)
+            release("0.3.5", filename="Source-code.zip"),
+            release("0.3.6", draft=True)
         ]):
             data = updater._github_update()
         self.assertFalse(data["available"])

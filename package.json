@@ -1,8 +1,8 @@
 {
   "name": "game-sweeper",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
-  "description": "Read-only SteamOS Decky compatdata and shader cache scanner",
+  "description": "SteamOS Decky compatdata and shader cache manager with guarded cleanup",
   "repository": "https://github.com/Viber85/game_sweeper",
   "scripts": {
     "build": "rollup -c",

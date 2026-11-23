@@ -56,6 +56,34 @@ export const scanStorage = callable<[], ScanData>("scan_storage");
 export const checkUpdate = callable<[], UpdateInfo>("check_update");
 export const resolveName = callable<[appid: string], NameInfo>("resolve_name");
 
+export type CleanupKind = "prefix" | "shader";
+export type CleanupPreview = {
+  ok: boolean;
+  error?: string;
+  token?: string;
+  name?: string;
+  appid?: string;
+  kind?: CleanupKind;
+  status?: Status;
+  bytes?: number;
+  path?: string;
+};
+export type CleanupResult = {
+  ok: boolean;
+  error?: string;
+  success?: boolean;
+  name?: string;
+  kind?: CleanupKind;
+  bytes?: number;
+};
+export const prepareCleanup = callable<
+  [library: string, appid: string, kind: CleanupKind], CleanupPreview
+>("prepare_cleanup");
+export const deleteStorage = callable<
+  [token: string, confirmation: string], CleanupResult
+>("delete_storage");
+
+
 /** Decky Loader's global installer route (not @decky/api's plugin-scoped call). */
 type InstallerBridge = {
   callable: (route: string) => (...args: unknown[]) => Promise<unknown>;
