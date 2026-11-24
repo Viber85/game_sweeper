@@ -1,4 +1,4 @@
-"""GameSweep v0.5.0 Decky backend with guarded opt-in cleanup."""
+"""GameSweep v0.6.0 Decky backend with guarded opt-in cleanup."""
 from __future__ import annotations
 
 import asyncio
@@ -17,8 +17,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 from scanner import read_cache, scan, write_cache
 from cleanup import (CleanupError, preview_cleanup, execute_cleanup,
                      preview_all_cleanup, execute_all_cleanup)
+from saves import (SaveError, preview_saves, create_backup, list_backups,
+                   preview_restore, restore_backup)
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 REPO = "Viber85/game_sweeper"
 
 
@@ -111,6 +113,7 @@ class Plugin:
         self.cache_path = Path(decky.DECKY_PLUGIN_SETTINGS_DIR) / "known_titles.json"
         self.lock = asyncio.Lock()
         self.pending_deletions = {}
+        self.pending_restores = {}
         decky.logger.info("GameSweep %s ready (guarded cleanup)", VERSION)
 
     async def scan_storage(self):
@@ -164,7 +167,8 @@ class Plugin:
                 self.pending_deletions[token] = (now, selected)
                 return {
                     "ok": True, "token": token, "name": selected["name"],
-                    "appid": selected["appid"], "kind": selected["kind"],
+                    "appid": selected["appid"], "library": selected["library"],
+                    "kind": selected["kind"],
                     "status": selected["status"], "game_type": selected["game_type"],
                     "type_source": selected["type_source"],
                     "bytes": selected["bytes"],
@@ -202,5 +206,71 @@ class Plugin:
                 decky.logger.warning("Cleanup refused or failed: %s", exc)
                 return {"ok": False, "error": str(exc)}
 
+    async def preview_save_backup(self, library: str, appid: str):
+        async with self.lock:
+            try:
+                details = await asyncio.to_thread(
+                    preview_saves, self.home, self.cache_path, library, appid
+                )
+                return details
+            except (SaveError, OSError, RuntimeError, ValueError) as exc:
+                return {"ok": False, "error": str(exc)}
+
+    async def create_save_backup(self, library: str, appid: str):
+        async with self.lock:
+            try:
+                result = await asyncio.to_thread(
+                    create_backup, self.home, self.cache_path, library, appid
+                )
+                decky.logger.info("Saved %s files for game %s", result["count"], appid)
+                return {"ok": True, **result}
+            except (SaveError, OSError, RuntimeError, ValueError) as exc:
+                decky.logger.warning("Save backup failed: %s", exc)
+                return {"ok": False, "error": str(exc)}
+
+    async def list_save_backups(self, appid: str = ""):
+        async with self.lock:
+            try:
+                items = await asyncio.to_thread(list_backups, self.home, appid)
+                return {"ok": True, "backups": items}
+            except (SaveError, OSError, RuntimeError, ValueError) as exc:
+                return {"ok": False, "error": str(exc), "backups": []}
+
+    async def prepare_save_restore(self, backup_id: str):
+        async with self.lock:
+            try:
+                details = await asyncio.to_thread(
+                    preview_restore, self.home, self.cache_path, backup_id
+                )
+                now = monotonic()
+                self.pending_restores = {
+                    key: value for key, value in self.pending_restores.items()
+                    if now - value[0] < 120
+                }
+                token = uuid4().hex
+                self.pending_restores[token] = (now, backup_id)
+                return {**details, "token": token}
+            except (SaveError, OSError, RuntimeError, ValueError) as exc:
+                return {"ok": False, "error": str(exc)}
+
+    async def restore_save_backup(self, token: str, confirmation: str):
+        if confirmation != "RESTORE_OVERWRITE":
+            return {"ok": False, "error": "Restore requires explicit confirmation"}
+        async with self.lock:
+            pending = self.pending_restores.pop(token, None)
+            if not pending or monotonic() - pending[0] > 120:
+                return {"ok": False, "error": "Restore confirmation expired"}
+            try:
+                result = await asyncio.to_thread(
+                    restore_backup, self.home, self.cache_path, pending[1]
+                )
+                decky.logger.info("Restored %s save files for %s",
+                                  result["count"], pending[1])
+                return result
+            except (SaveError, OSError, RuntimeError, ValueError) as exc:
+                decky.logger.warning("Save restore refused: %s", exc)
+                return {"ok": False, "error": str(exc)}
+
     async def _unload(self):
         self.pending_deletions.clear()
+        self.pending_restores.clear()

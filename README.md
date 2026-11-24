@@ -1,8 +1,8 @@
-# GameSweep v0.5.0
+# GameSweep v0.6.0
 
 GameSweep is a fullscreen Decky Loader storage manager for SteamOS Game Mode.
 
-## What's new in v0.5.0
+## What's new in v0.6.0
 
 - **Full four-way controller navigation** uses Steam's native `vgp_ondirection` / `BTakeFocus` focus system: D-pad or left analog moves up/down/left/right. A selects; B exits fullscreen or dismisses the confirmation dialog. The sidebar, results and confirmation modal are navigable without touch or mouse.
 - New **Delete entire game data (prefix + shaders)** action appears when both compatdata and shader cache folders are present. Both paths and their combined estimated size are displayed in **one** irreversible-deletion confirmation. It does NOT uninstall the main game.
@@ -36,7 +36,7 @@ For unsupported versions of Steam's native focus tree, the handler leaves the ev
 ## Installation
 
 1. Install Decky Loader on SteamOS.
-2. Download **GameSweep-v0.5.0.zip** from [GitHub Releases](https://github.com/Viber85/game_sweeper/releases).
+2. Download **GameSweep-v0.6.0.zip** from [GitHub Releases](https://github.com/Viber85/game_sweeper/releases).
 3. In Decky developer settings, select **Install Plugin from ZIP File** and choose the downloaded release ZIP.
 4. Select GameSweep in the Decky menu; it automatically enters fullscreen.
 5. Open **Settings → Check for updates** to check GitHub Releases for future versions.
@@ -61,7 +61,7 @@ Use the **Release asset ZIP**, not GitHub's automatically generated source ZIP.
 4. If the game is installed, explicitly acknowledge **the game is still installed** in a second control.
 5. Confirm permanent deletion. The backend re-checks current Steam metadata and directory identity before removing exactly the selected directory.
 
-No backup, recycle bin or restore function is included yet. Close games and launchers before cleaning. The running-process check is best effort, so do not depend on it alone. The UI has **no bulk or unattended cleanup**.
+Save-only backup and restore are supported for recognized Proton games; no full-prefix backup, recycle bin, or restoration of deleted game installations exists. Close games and launchers before cleaning. The running-process check is best effort, so do not depend on it alone. The UI has **no bulk or unattended cleanup**.
 
 ## Updating
 
@@ -81,3 +81,20 @@ python -m unittest discover -s tests -v
 GitHub Actions builds the plugin ZIP, runs frontend and backend tests and creates a versioned prerelease. It includes the bundled CA root certificates and license.
 
 **Limitations:** Identification and cleanup depend on Steam metadata that may be incomplete, especially for deleted Non-Steam shortcuts. Automatic tests do not prove that the Game Mode navigation works on every Decky Loader version. Fullscreen auto-navigation, controller focus and installed-game removal should be tested on a real SteamOS device using disposable non-essential data first.
+
+## Save Backup Manager (v0.6.0)
+
+Only SAVE files are included: GameSweep does not back up whole Proton prefixes, game installs or shader caches.
+
+- Open a game row and choose **Backup Saves** to preview discovered save files, sizes and source paths.
+- Save detection uses an offline, save-tagged subset of Ludusavi Manifest by Steam AppID or exact known title.
+- Steam and Non-Steam games in Proton Windows prefixes are supported when the rules match.
+- Backups live outside the plugin at ~/.local/share/GameSweep/save-backups and survive plugin updates.
+- Save Backups sidebar shows snapshots and lets you restore them after confirming possible overwrites.
+- Saved files are SHA-256 verified before restoring; games must be closed.
+- The prefix and combined-delete confirmation offer **Back up saves before deleting**.
+- No match does NOT mean that the game has no saves. Empty backups are never created.
+- Native Linux, registry-only, external Wine prefix, and Steam Cloud-only save locations are not supported yet.
+- Restore is file-by-file, not transactional; an interrupted restore can be partial, but the backup remains untouched.
+- Only explicitly save-tagged Ludusavi paths are bundled; the full Ludusavi detection engine is not implemented.
+- Ludusavi Manifest is distributed under MIT license; see SAVE-RULES-LICENSE inside the release ZIP.

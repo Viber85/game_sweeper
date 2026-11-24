@@ -2,7 +2,7 @@ import { callable } from "@decky/api";
 
 export type Status = "installed" | "candidate" | "review";
 export type GameType = "steam" | "non_steam" | "unknown";
-export type Tab = "overview" | "libraries" | "results" | "review" | "settings";
+export type Tab = "overview" | "libraries" | "results" | "review" | "backups" | "settings";
 export type Filter = "all" | Status;
 
 export type Entry = {
@@ -66,6 +66,7 @@ export type CleanupPreview = {
   token?: string;
   name?: string;
   appid?: string;
+  library?: string;
   kind?: CleanupKind;
   status?: Status;
   game_type?: GameType;
@@ -90,6 +91,71 @@ export const deleteStorage = callable<
   [token: string, confirmation: string], CleanupResult
 >("delete_storage");
 
+
+export type SavePreview = {
+  ok: boolean;
+  error?: string;
+  supported?: boolean;
+  name?: string;
+  appid?: string;
+  library?: string;
+  count?: number;
+  bytes?: number;
+  sample?: string[];
+  method?: string;
+  message?: string;
+};
+export type SaveSnapshot = {
+  schema: number;
+  id: string;
+  appid: string;
+  library: string;
+  name: string;
+  created_at: string;
+  bytes: number;
+  count: number;
+};
+export type SaveListResult = {
+  ok: boolean;
+  error?: string;
+  backups: SaveSnapshot[];
+};
+export type RestorePreview = {
+  ok: boolean;
+  error?: string;
+  id?: string;
+  token?: string;
+  name?: string;
+  appid?: string;
+  count?: number;
+  bytes?: number;
+  conflicts?: number;
+  created_at?: string;
+  message?: string;
+};
+export type SaveActionResult = {
+  ok: boolean;
+  error?: string;
+  id?: string;
+  count?: number;
+  bytes?: number;
+  name?: string;
+};
+export const previewSaveBackup = callable<
+  [library: string, appid: string], SavePreview
+>("preview_save_backup");
+export const createSaveBackup = callable<
+  [library: string, appid: string], SaveActionResult
+>("create_save_backup");
+export const listSaveBackups = callable<
+  [appid: string], SaveListResult
+>("list_save_backups");
+export const prepareSaveRestore = callable<
+  [backup_id: string], RestorePreview
+>("prepare_save_restore");
+export const restoreSaveBackup = callable<
+  [token: string, confirmation: string], SaveActionResult
+>("restore_save_backup");
 
 /** Decky Loader's global installer route (not @decky/api's plugin-scoped call). */
 type InstallerBridge = {

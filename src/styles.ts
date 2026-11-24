@@ -119,4 +119,13 @@ export const style = `
 .gs-list-row-wrap{scroll-margin-bottom:70px}
 .gs-modal-layer{overscroll-behavior:contain}
 .gs-modal{scroll-padding-bottom:28px}
+
+.gs-screen .gs-save-row .DialogButton{background:linear-gradient(120deg,rgba(27,160,133,.27),rgba(45,119,161,.19))!important;color:#8af5d2!important;border:1px solid rgba(72,190,169,.35)!important;font-weight:700!important}
+.gs-backup-list{display:flex;flex-direction:column;gap:8px;margin-top:15px}
+.gs-backup-item{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:14px;border:1px solid rgba(177,213,244,.12);border-radius:11px;background:rgba(5,19,34,.33)}
+.gs-backup-info{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px;overflow-wrap:anywhere}
+.gs-backup-item .DialogButton{min-width:155px!important;background:rgba(27,112,116,.28)!important;color:#99edde!important}
+.gs-modal .gs-action-primary>.DialogButton{width:100%!important;background:linear-gradient(120deg,#1bcab5,#30bbc7)!important;color:#041b25!important;font-weight:750!important}
+.gs-backup-item .gs-game-title{font-size:14px}
+@media(max-width:840px){.gs-backup-item{align-items:stretch;flex-direction:column}.gs-backup-item .DialogButton{width:100%!important}}
 `;

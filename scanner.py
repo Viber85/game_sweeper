@@ -280,7 +280,7 @@ def scan(home: Path, cache_file: Path) -> dict[str, Any]:
         except OSError:
             continue
     return {
-        "version": "0.5.0",
+        "version": "0.6.0",
         "scanned_at": datetime.now(timezone.utc).isoformat(),
         "libraries": [str(path.parent) for path in libraries],
         "disks": disks,
