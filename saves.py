@@ -177,8 +177,7 @@ def _find_files(prefix: Path, rules: list[str]) -> list[dict]:
                     if path.is_dir():
                         iterator = ((Path(root) / filename)
                                     for root, dirs, files in os.walk(path, followlinks=False)
-                                    for filename in files
-                                    if not (Path(root) / filename).is_symlink())
+                                    for filename in files)
                     else:
                         iterator = iter((path,))
                     for candidate in iterator:
