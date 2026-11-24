@@ -1,8 +1,8 @@
-# GameSweep v0.6.0
+# GameSweep v0.7.0
 
 GameSweep is a fullscreen Decky Loader storage manager for SteamOS Game Mode.
 
-## What's new in v0.6.0
+## What's new in v0.7.0
 
 - **Full four-way controller navigation** uses Steam's native `vgp_ondirection` / `BTakeFocus` focus system: D-pad or left analog moves up/down/left/right. A selects; B exits fullscreen or dismisses the confirmation dialog. The sidebar, results and confirmation modal are navigable without touch or mouse.
 - New **Delete entire game data (prefix + shaders)** action appears when both compatdata and shader cache folders are present. Both paths and their combined estimated size are displayed in **one** irreversible-deletion confirmation. It does NOT uninstall the main game.
@@ -36,7 +36,7 @@ For unsupported versions of Steam's native focus tree, the handler leaves the ev
 ## Installation
 
 1. Install Decky Loader on SteamOS.
-2. Download **GameSweep-v0.6.0.zip** from [GitHub Releases](https://github.com/Viber85/game_sweeper/releases).
+2. Download **GameSweep-v0.7.0.zip** from [GitHub Releases](https://github.com/Viber85/game_sweeper/releases).
 3. In Decky developer settings, select **Install Plugin from ZIP File** and choose the downloaded release ZIP.
 4. Select GameSweep in the Decky menu; it automatically enters fullscreen.
 5. Open **Settings → Check for updates** to check GitHub Releases for future versions.
@@ -82,7 +82,7 @@ GitHub Actions builds the plugin ZIP, runs frontend and backend tests and create
 
 **Limitations:** Identification and cleanup depend on Steam metadata that may be incomplete, especially for deleted Non-Steam shortcuts. Automatic tests do not prove that the Game Mode navigation works on every Decky Loader version. Fullscreen auto-navigation, controller focus and installed-game removal should be tested on a real SteamOS device using disposable non-essential data first.
 
-## Save Backup Manager (v0.6.0)
+## Save Backup Manager (v0.7.0)
 
 Only SAVE files are included: GameSweep does not back up whole Proton prefixes, game installs or shader caches.
 
@@ -98,3 +98,28 @@ Only SAVE files are included: GameSweep does not back up whole Proton prefixes, 
 - Restore is file-by-file, not transactional; an interrupted restore can be partial, but the backup remains untouched.
 - Only explicitly save-tagged Ludusavi paths are bundled; the full Ludusavi detection engine is not implemented.
 - Ludusavi Manifest is distributed under MIT license; see SAVE-RULES-LICENSE inside the release ZIP.
+
+## v0.7.0 — Backup destination chooser and manual save detection
+
+- In **Save Backups**, select **Choose backup folder**. The fullscreen folder
+  browser supports Home, /run/media, /media and /mnt (internal, microSD and mounted drives).
+- Each selection stores snapshots in a `GameSweep/save-backups` directory
+  under the chosen folder. Default is `~/.local/share/GameSweep/save-backups`.
+- The selected folder is remembered in Decky's plugin settings across updates.
+  Existing snapshots remain visible after changing destination while their
+  original drive is attached. A disconnected selected disk produces a clear error.
+- The Backup Saves preview also includes **Change backup destination**.
+- When a game's save location has no matching rules or existing files, GameSweep
+  explains the detection failure and offers **Find save folder manually**.
+- Manually browse only *inside the selected game's Proton C: drive*. You can
+  select a specific game folder; the entire prefix and broad OS directories
+  cannot be selected. Manual folders persist for the chosen AppID + library.
+- **Important:** a user-selected folder backs up ALL regular files it
+  contains, including configs if placed there. Inspect its contents carefully.
+- There is also a reset to automatic detection.
+- Games storing saves outside their Steam Proton prefix, such as some native
+  Linux, Heroic/GOG or externally managed Wine prefixes, are not automatically
+  supported by this picker. Their unrecognized save locations require later
+  dedicated integrations; GameSweep never claims they are safely backed up.
+- Backup/restore uses file hashes, temporary directories, and explicit
+  overwriting confirmation. It never deletes originals during backup.

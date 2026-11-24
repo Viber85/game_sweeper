@@ -45,7 +45,7 @@ jobs:
           VERSION="$(node -p 'require("./package.json").version')"
           TAG="v$VERSION"
           mkdir -p "package/GameSweep/dist"
-          cp main.py scanner.py shortcuts.py cleanup.py saves.py save_rules.json SAVE-RULES-LICENSE plugin.json package.json "package/GameSweep/"
+          cp main.py scanner.py shortcuts.py cleanup.py saves.py backup_locations.py manual_saves.py save_rules.json SAVE-RULES-LICENSE plugin.json package.json "package/GameSweep/"
           cp dist/index.js "package/GameSweep/dist/"
           python - <<'PY'
           import certifi

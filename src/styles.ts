@@ -128,4 +128,16 @@ export const style = `
 .gs-modal .gs-action-primary>.DialogButton{width:100%!important;background:linear-gradient(120deg,#1bcab5,#30bbc7)!important;color:#041b25!important;font-weight:750!important}
 .gs-backup-item .gs-game-title{font-size:14px}
 @media(max-width:840px){.gs-backup-item{align-items:stretch;flex-direction:column}.gs-backup-item .DialogButton{width:100%!important}}
+
+.gs-backup-destination{padding:16px;border:1px solid rgba(89,186,196,.28);background:linear-gradient(110deg,rgba(31,106,120,.15),rgba(14,28,47,.12));border-radius:12px;display:flex;flex-direction:column;gap:8px;margin:14px 0}
+.gs-backup-destination strong{display:flex;align-items:center;gap:4px;color:#dff8fa}
+.gs-folder-path{overflow-wrap:anywhere;line-height:1.55;padding:9px 11px;background:rgba(4,14,26,.58);border:1px solid rgba(165,204,234,.14);border-radius:8px;color:#b7e1f6;font-size:12px}
+.gs-folder-picker{width:min(660px,100%)!important;display:flex;flex-direction:column;gap:10px}
+.gs-folder-picker .gs-modal-subtitle{margin-bottom:4px}
+.gs-picker-list{display:flex;flex-direction:column;gap:4px;overflow-y:auto;min-height:80px;max-height:32vh;padding:5px 3px;scrollbar-width:thin;border-top:1px solid rgba(174,211,243,.10);border-bottom:1px solid rgba(174,211,243,.10)}
+.gs-picker-list .DialogButton{width:100%!important;text-align:left!important;font-size:12px!important;padding:7px 11px!important;background:rgba(53,87,112,.26)!important;color:#dbeef9!important}
+.gs-picker-list .DialogButton:focus{outline:2px solid #60e3de!important}
+.gs-folder-picker .gs-modal-action{flex-shrink:0}
+.gs-picker-error{margin:0!important;max-height:65px;overflow-y:auto}
+@media (max-height: 650px){.gs-folder-picker{padding:10px 15px!important}.gs-picker-list{max-height:24vh}.gs-folder-picker .gs-modal-warning{margin:3px 0}}
 `;

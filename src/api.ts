@@ -103,6 +103,7 @@ export type SavePreview = {
   bytes?: number;
   sample?: string[];
   method?: string;
+  manual?: boolean;
   message?: string;
 };
 export type SaveSnapshot = {
@@ -114,6 +115,7 @@ export type SaveSnapshot = {
   created_at: string;
   bytes: number;
   count: number;
+  backup_folder?: string;
 };
 export type SaveListResult = {
   ok: boolean;
@@ -140,6 +142,7 @@ export type SaveActionResult = {
   count?: number;
   bytes?: number;
   name?: string;
+  backup_folder?: string;
 };
 export const previewSaveBackup = callable<
   [library: string, appid: string], SavePreview
@@ -156,6 +159,55 @@ export const prepareSaveRestore = callable<
 export const restoreSaveBackup = callable<
   [token: string, confirmation: string], SaveActionResult
 >("restore_save_backup");
+
+export type BackupLocation = {
+  ok: boolean;
+  error?: string;
+  base?: string;
+  folder?: string;
+  free?: number;
+  default?: boolean;
+  known?: number;
+};
+export type DirectoryBrowser = {
+  ok: boolean;
+  error?: string;
+  path?: string;
+  parent?: string;
+  selectable?: boolean;
+  free?: number;
+  folders?: { name: string; path: string }[];
+};
+export type ManualSaveBrowser = {
+  ok: boolean;
+  error?: string;
+  relative?: string;
+  parent?: string;
+  selectable?: boolean;
+  count?: number;
+  bytes?: number;
+  folders?: { name: string; relative: string }[];
+};
+export type ManualSaveResult = {
+  ok: boolean;
+  error?: string;
+  relative?: string;
+  count?: number;
+  bytes?: number;
+};
+export const getBackupLocation = callable<[], BackupLocation>("get_backup_location");
+export const browseBackupFolders = callable<[path: string], DirectoryBrowser>("browse_backup_folders");
+export const chooseBackupLocation = callable<[path: string], BackupLocation>("choose_backup_location");
+export const resetBackupLocation = callable<[], BackupLocation>("reset_backup_location");
+export const browseSaveFolders = callable<
+  [library: string, appid: string, relative: string], ManualSaveBrowser
+>("browse_save_folders");
+export const chooseSaveFolder = callable<
+  [library: string, appid: string, relative: string], ManualSaveResult
+>("choose_save_folder");
+export const resetSaveFolder = callable<
+  [library: string, appid: string], ManualSaveResult
+>("reset_save_folder");
 
 /** Decky Loader's global installer route (not @decky/api's plugin-scoped call). */
 type InstallerBridge = {

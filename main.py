@@ -18,9 +18,13 @@ from scanner import read_cache, scan, write_cache
 from cleanup import (CleanupError, preview_cleanup, execute_cleanup,
                      preview_all_cleanup, execute_all_cleanup)
 from saves import (SaveError, preview_saves, create_backup, list_backups,
-                   preview_restore, restore_backup)
+                   preview_restore, restore_backup, _select_game)
+from backup_locations import (FolderError, browser as browse_backup_dirs,
+                              choose_location, reset_location, location_status)
+from manual_saves import (ManualSaveError, browse_game_save_folders,
+                          select_manual_save_folder, clear_manual_save_folder)
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 REPO = "Viber85/game_sweeper"
 
 
@@ -231,7 +235,7 @@ class Plugin:
     async def list_save_backups(self, appid: str = ""):
         async with self.lock:
             try:
-                items = await asyncio.to_thread(list_backups, self.home, appid)
+                items = await asyncio.to_thread(list_backups, self.home, appid, self.cache_path)
                 return {"ok": True, "backups": items}
             except (SaveError, OSError, RuntimeError, ValueError) as exc:
                 return {"ok": False, "error": str(exc), "backups": []}
@@ -269,6 +273,77 @@ class Plugin:
                 return result
             except (SaveError, OSError, RuntimeError, ValueError) as exc:
                 decky.logger.warning("Save restore refused: %s", exc)
+                return {"ok": False, "error": str(exc)}
+
+    async def get_backup_location(self):
+        async with self.lock:
+            try:
+                return await asyncio.to_thread(
+                    location_status, self.home, self.cache_path
+                )
+            except (FolderError, OSError, ValueError) as exc:
+                return {"ok": False, "error": str(exc)}
+
+    async def browse_backup_folders(self, path: str = ""):
+        async with self.lock:
+            try:
+                return await asyncio.to_thread(browse_backup_dirs, self.home, path)
+            except (FolderError, OSError, ValueError) as exc:
+                return {"ok": False, "error": str(exc)}
+
+    async def choose_backup_location(self, path: str):
+        async with self.lock:
+            try:
+                return await asyncio.to_thread(
+                    choose_location, self.home, self.cache_path, path
+                )
+            except (FolderError, OSError, ValueError) as exc:
+                return {"ok": False, "error": str(exc)}
+
+    async def reset_backup_location(self):
+        async with self.lock:
+            try:
+                return await asyncio.to_thread(
+                    reset_location, self.home, self.cache_path
+                )
+            except (FolderError, OSError, ValueError) as exc:
+                return {"ok": False, "error": str(exc)}
+
+    async def browse_save_folders(self, library: str, appid: str,
+                                  relative: str = ""):
+        async with self.lock:
+            try:
+                game = await asyncio.to_thread(
+                    _select_game, self.home, self.cache_path, library, appid
+                )
+                return await asyncio.to_thread(
+                    browse_game_save_folders, Path(game["prefix_path"]), relative
+                )
+            except (SaveError, ManualSaveError, OSError, ValueError) as exc:
+                return {"ok": False, "error": str(exc)}
+
+    async def choose_save_folder(self, library: str, appid: str,
+                                 relative: str):
+        async with self.lock:
+            try:
+                game = await asyncio.to_thread(
+                    _select_game, self.home, self.cache_path, library, appid
+                )
+                return await asyncio.to_thread(
+                    select_manual_save_folder, self.cache_path, library,
+                    appid, Path(game["prefix_path"]), relative
+                )
+            except (SaveError, ManualSaveError, OSError, ValueError) as exc:
+                return {"ok": False, "error": str(exc)}
+
+    async def reset_save_folder(self, library: str, appid: str):
+        async with self.lock:
+            try:
+                await asyncio.to_thread(
+                    clear_manual_save_folder, self.cache_path, library, appid
+                )
+                return {"ok": True}
+            except (ManualSaveError, OSError, ValueError) as exc:
                 return {"ok": False, "error": str(exc)}
 
     async def _unload(self):

@@ -4,14 +4,16 @@ import type { ReactNode } from "react";
 import {
   FaArrowLeft, FaBroom, FaCog, FaDatabase, FaDownload,
   FaExclamationTriangle, FaHdd, FaHome, FaLayerGroup,
-  FaList, FaSearch, FaShieldAlt, FaSyncAlt, FaSave, FaUndo
+  FaList, FaSearch, FaShieldAlt, FaSyncAlt, FaSave, FaUndo, FaFolderOpen, FaArrowUp
 } from "react-icons/fa";
 import {
   bytes, checkUpdate, requestDeckyUpdate, resolveName, scanStorage,
   prepareCleanup, deleteStorage, previewSaveBackup,
-  createSaveBackup, listSaveBackups, prepareSaveRestore, restoreSaveBackup
+  createSaveBackup, listSaveBackups, prepareSaveRestore, restoreSaveBackup,
+  getBackupLocation, browseBackupFolders, chooseBackupLocation, resetBackupLocation,
+  browseSaveFolders, chooseSaveFolder, resetSaveFolder
 } from "./api";
-import type { Disk, Entry, Filter, ScanData, Tab, UpdateInfo, CleanupPreview, CleanupKind, GameType, SavePreview, SaveSnapshot, RestorePreview } from "./api";
+import type { Disk, Entry, Filter, ScanData, Tab, UpdateInfo, CleanupPreview, CleanupKind, GameType, SavePreview, SaveSnapshot, RestorePreview, BackupLocation, DirectoryBrowser, ManualSaveBrowser } from "./api";
 import { style } from "./styles";
 import { useGameSweepGamepadFocus, focusGameSweepFirstButton } from "./focus";
 
@@ -84,7 +86,7 @@ function GameTypePill({ type }: { type: GameType }) {
   return <span className={"gs-type gs-type-" + type}>{label}</span>;
 }
 
-function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows, onDelete, cleanupBusy, onBackup, saveBusy }: {
+function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows, onDelete, cleanupBusy, onBackup, onFindSaves, saveBusy }: {
   entries: Entry[];
   selected: string;
   onSelect: (key: string) => void;
@@ -94,6 +96,7 @@ function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows, 
   onDelete: (entry: Entry, kind: CleanupKind) => void;
   cleanupBusy: boolean;
   onBackup: (entry: Pick<Entry, "library" | "id">) => void;
+  onFindSaves: (entry: Pick<Entry, "library" | "id">) => void;
   saveBusy: boolean;
 }) {
   const showing = maxRows ? entries.slice(0, maxRows) : entries;
@@ -145,6 +148,10 @@ function ItemList({ entries, selected, onSelect, onLookup, lookupBusy, maxRows, 
                     <ButtonItem layout="below" disabled={saveBusy || cleanupBusy}
                       onClick={() => onBackup(entry)}>
                       <FaSave style={{ marginRight: 7 }} /> Backup Saves…
+                    </ButtonItem>
+                    <ButtonItem layout="below" disabled={saveBusy || cleanupBusy}
+                      onClick={() => onFindSaves(entry)}>
+                      <FaFolderOpen style={{ marginRight: 7 }} /> Find save folder manually…
                     </ButtonItem>
                   </div>
                 )}
@@ -232,8 +239,16 @@ export function GameSweepFullScreen() {
   const [savePreparing, setSavePreparing] = useState(false);
   const [backupList, setBackupList] = useState<SaveSnapshot[]>([]);
   const [backupNotice, setBackupNotice] = useState("");
+  const [backupLocation, setBackupLocation] = useState<BackupLocation | null>(null);
+  const [folderBrowser, setFolderBrowser] = useState<DirectoryBrowser | null>(null);
+  const [manualBrowser, setManualBrowser] = useState<ManualSaveBrowser | null>(null);
+  const [manualGame, setManualGame] = useState<Pick<Entry, "library" | "id"> | null>(null);
+  const [problemGame, setProblemGame] = useState<Pick<Entry, "library" | "id"> | null>(null);
+  const [saveProblem, setSaveProblem] = useState("");
+  const [browserBusy, setBrowserBusy] = useState(false);
   useGameSweepGamepadFocus(screenRef,
-    deletePreview !== null || backupPreview !== null || restorePreview !== null);
+    deletePreview !== null || backupPreview !== null || restorePreview !== null ||
+    folderBrowser !== null || manualBrowser !== null || !!saveProblem);
 
   const refresh = useCallback(async () => {
     if (scanPending.current) return;
@@ -265,14 +280,15 @@ export function GameSweepFullScreen() {
   }, []);
 
   useEffect(() => {
-    if (!deletePreview && !backupPreview && !restorePreview) return;
+    if (!deletePreview && !backupPreview && !restorePreview &&
+        !folderBrowser && !manualBrowser && !saveProblem) return;
     const timer = window.setTimeout(() => {
       if (screenRef.current) {
         focusGameSweepFirstButton(screenRef.current, ".gs-modal .DialogButton");
       }
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [deletePreview, backupPreview, restorePreview]);
+  }, [deletePreview, backupPreview, restorePreview, folderBrowser, manualBrowser, saveProblem]);
 
   const disk = useMemo(
     () => data?.disks?.find(d => d.library === diskId) || data?.disks?.[0],
@@ -389,6 +405,16 @@ export function GameSweepFullScreen() {
     }
   }
 
+  async function refreshBackupLocation() {
+    try {
+      const result = await getBackupLocation();
+      if (result.ok) setBackupLocation(result);
+      else setError("Backup location unavailable: " + (result.error || "Unknown error"));
+    } catch (e) {
+      setError("Backup location unavailable: " + String(e));
+    }
+  }
+
   async function reloadBackupList() {
     try {
       const result = await listSaveBackups("");
@@ -400,13 +426,18 @@ export function GameSweepFullScreen() {
   }
 
   useEffect(() => {
-    if (tab === "backups") void reloadBackupList();
+    if (tab === "backups") {
+      void reloadBackupList();
+      void refreshBackupLocation();
+    }
   }, [tab]);
 
   async function beginSaveBackup(game: Pick<Entry, "library" | "id">) {
     if (saving || savePreparing) return;
     setError("");
     setBackupNotice("");
+    setSaveProblem("");
+    setProblemGame(null);
     setDeletePreview(null);
     setSavePreparing(true);
     try {
@@ -414,9 +445,11 @@ export function GameSweepFullScreen() {
       if (!result.ok) {
         setError("Save detection failed: " + (result.error || "unknown error"));
       } else if (!result.supported || !result.count) {
-        setBackupNotice(result.message || "No known save files for this game.");
+        setProblemGame(game);
+        setSaveProblem(result.message || "No matching save files were found.");
       } else {
         setBackupPreview(result);
+        void refreshBackupLocation();
       }
     } catch (e) {
       setError("Save detection failed: " + String(e));
@@ -437,7 +470,8 @@ export function GameSweepFullScreen() {
         return;
       }
       setBackupNotice("Backed up " + (result.count || 0) + " save file(s) for " +
-        (result.name || backupPreview.name) + ". Saved outside the plugin installation.");
+        (result.name || backupPreview.name) + " in " +
+        (result.backup_folder || backupLocation?.folder || "the selected backup folder") + ".");
       setBackupPreview(null);
       await reloadBackupList();
     } catch (e) {
@@ -490,6 +524,127 @@ export function GameSweepFullScreen() {
     }
   }
 
+  async function openBackupPicker(path: string) {
+    if (browserBusy) return;
+    setBrowserBusy(true);
+    setError("");
+    try {
+      const result = await browseBackupFolders(path);
+      if (!result.ok) {
+        setError("Cannot browse backup folders: " + (result.error || "Unknown error"));
+      } else {
+        setFolderBrowser(result);
+      }
+    } catch (e) {
+      setError("Cannot browse backup folders: " + String(e));
+    } finally {
+      setBrowserBusy(false);
+    }
+  }
+
+  async function selectBackupDestination() {
+    if (!folderBrowser?.path || !folderBrowser.selectable || browserBusy) return;
+    setBrowserBusy(true);
+    setError("");
+    try {
+      const result = await chooseBackupLocation(folderBrowser.path);
+      if (!result.ok) {
+        setError("Invalid backup location: " + (result.error || "Unknown error"));
+      } else {
+        setBackupLocation(result);
+        setFolderBrowser(null);
+        setBackupNotice("Backups will now be saved to " + result.folder +
+          ". Existing backups in previous locations remain available when those drives are connected.");
+        await reloadBackupList();
+      }
+    } catch (e) {
+      setError("Cannot set backup location: " + String(e));
+    } finally {
+      setBrowserBusy(false);
+    }
+  }
+
+  async function useDefaultBackupDestination() {
+    setError("");
+    try {
+      const result = await resetBackupLocation();
+      if (!result.ok) {
+        setError("Cannot reset location: " + (result.error || "Unknown error"));
+      } else {
+        setBackupLocation(result);
+        setBackupNotice("Backup destination reset to " + result.folder + ".");
+        await reloadBackupList();
+      }
+    } catch (e) {
+      setError("Cannot reset backup location: " + String(e));
+    }
+  }
+
+  async function openManualSavePicker(
+    game: Pick<Entry, "library" | "id">, relative: string
+  ) {
+    if (browserBusy) return;
+    setBrowserBusy(true);
+    setError("");
+    setSaveProblem("");
+    setManualGame(game);
+    try {
+      const result = await browseSaveFolders(game.library, game.id, relative);
+      if (!result.ok) {
+        setError("Cannot browse game saves: " + (result.error || "Unknown error"));
+      } else {
+        setManualBrowser(result);
+      }
+    } catch (e) {
+      setError("Cannot browse game saves: " + String(e));
+    } finally {
+      setBrowserBusy(false);
+    }
+  }
+
+  async function selectManualSaveLocation() {
+    if (!manualGame || !manualBrowser?.relative || !manualBrowser.selectable || browserBusy) return;
+    setBrowserBusy(true);
+    setError("");
+    try {
+      const result = await chooseSaveFolder(
+        manualGame.library, manualGame.id, manualBrowser.relative
+      );
+      if (!result.ok) {
+        setError("Cannot save folder choice: " + (result.error || "Unknown error"));
+      } else {
+        const game = manualGame;
+        setManualBrowser(null);
+        setBackupNotice("Selected game save folder: " + result.relative +
+          ". Only files inside this folder will be included; inspect the backup preview.");
+        await beginSaveBackup(game);
+      }
+    } catch (e) {
+      setError("Cannot select save folder: " + String(e));
+    } finally {
+      setBrowserBusy(false);
+    }
+  }
+
+  async function clearManualSelection() {
+    if (!manualGame || browserBusy) return;
+    setBrowserBusy(true);
+    try {
+      const result = await resetSaveFolder(manualGame.library, manualGame.id);
+      if (!result.ok) {
+        setError(result.error || "Cannot reset manual game folder");
+      } else {
+        const game = manualGame;
+        setManualBrowser(null);
+        await beginSaveBackup(game);
+      }
+    } catch (e) {
+      setError("Cannot reset manual game folder: " + String(e));
+    } finally {
+      setBrowserBusy(false);
+    }
+  }
+
   const title = tab === "overview" ? "Storage Overview" :
     tab === "libraries" ? "Steam Libraries" :
     tab === "results" ? "Scan Results" :
@@ -526,7 +681,10 @@ export function GameSweepFullScreen() {
 
   return (
     <Focusable onCancelButton={() => {
-      if (restorePreview) setRestorePreview(null);
+      if (folderBrowser) setFolderBrowser(null);
+      else if (manualBrowser) setManualBrowser(null);
+      else if (saveProblem) setSaveProblem("");
+      else if (restorePreview) setRestorePreview(null);
       else if (backupPreview) setBackupPreview(null);
       else if (deletePreview) setDeletePreview(null);
       else exitFullscreen();
@@ -563,7 +721,7 @@ export function GameSweepFullScreen() {
               <h1 className="gs-title">GameSweep <span style={{ color: "#6f859f" }}>/</span> {title}</h1>
               <div className="gs-subtitle">Compatdata and shader cache overview for SteamOS</div>
             </div>
-            <div className="gs-right-tag">Game Mode · v0.6.0</div>
+            <div className="gs-right-tag">Game Mode · v0.7.0</div>
           </header>
 
           {!!error && <div className="gs-note"><FaExclamationTriangle style={{ marginRight: 8 }} />{error}</div>}
@@ -619,7 +777,8 @@ export function GameSweepFullScreen() {
                 <ItemList entries={filtered} selected={selected} onSelect={setSelected}
                   lookupBusy={lookupBusy} onLookup={(id) => { void nameLookup(id); }} maxRows={6}
                   cleanupBusy={cleanupPreparing || deleting} onDelete={(e, k) => { void requestDeletion(e, k); }}
-                  saveBusy={saving || savePreparing} onBackup={(e) => { void beginSaveBackup(e); }} />
+                  saveBusy={saving || savePreparing} onBackup={(e) => { void beginSaveBackup(e); }}
+                  onFindSaves={(e) => { void openManualSavePicker(e, ""); }} />
               </section>
             </>
           )}
@@ -661,7 +820,8 @@ export function GameSweepFullScreen() {
               <ItemList entries={filtered} selected={selected} onSelect={setSelected}
                 lookupBusy={lookupBusy} onLookup={(id) => { void nameLookup(id); }}
                 cleanupBusy={cleanupPreparing || deleting} onDelete={(e, k) => { void requestDeletion(e, k); }}
-                  saveBusy={saving || savePreparing} onBackup={(e) => { void beginSaveBackup(e); }} />
+                  saveBusy={saving || savePreparing} onBackup={(e) => { void beginSaveBackup(e); }}
+                  onFindSaves={(e) => { void openManualSavePicker(e, ""); }} />
               <div className="gs-action">
                 <ButtonItem layout="below" disabled={busy} onClick={() => { void refresh(); }}>
                   <FaSyncAlt style={{ marginRight: 7 }} />{busy ? "Scanning..." : "Scan again"}
@@ -690,7 +850,8 @@ export function GameSweepFullScreen() {
                   selected={selected} onSelect={setSelected}
                   lookupBusy={lookupBusy} onLookup={(id) => { void nameLookup(id); }}
                 cleanupBusy={cleanupPreparing || deleting} onDelete={(e, k) => { void requestDeletion(e, k); }}
-                  saveBusy={saving || savePreparing} onBackup={(e) => { void beginSaveBackup(e); }} />
+                  saveBusy={saving || savePreparing} onBackup={(e) => { void beginSaveBackup(e); }}
+                  onFindSaves={(e) => { void openManualSavePicker(e, ""); }} />
               </section>
             </>
           )}
@@ -709,11 +870,33 @@ export function GameSweepFullScreen() {
                   </ButtonItem>
                 </div>
               </div>
+              <div className="gs-backup-destination">
+                <strong><FaFolderOpen style={{ marginRight: 8 }} />Backup destination</strong>
+                <div className="gs-folder-path">
+                  {backupLocation?.folder || "Default: ~/.local/share/GameSweep/save-backups"}
+                </div>
+                <div className="gs-muted">
+                  {backupLocation?.free !== undefined ?
+                    bytes(backupLocation.free) + " free on selected volume" :
+                    "Select internal storage, a microSD card, or a mounted drive"}
+                </div>
+                <div className="gs-action">
+                  <ButtonItem layout="below" disabled={browserBusy || saving}
+                    onClick={() => { void openBackupPicker(""); }}>
+                    <FaFolderOpen style={{ marginRight: 7 }} />Choose backup folder…
+                  </ButtonItem>
+                  <ButtonItem layout="below" disabled={browserBusy || saving}
+                    onClick={() => { void useDefaultBackupDestination(); }}>
+                    Use default
+                  </ButtonItem>
+                </div>
+              </div>
               <div className="gs-muted" style={{ margin: "15px 2px" }}>
-                Only save files with explicitly identified save locations are copied.
-                Backups are stored at ~/.local/share/GameSweep/save-backups and survive plugin updates.
-                This version supports Windows game saves inside Steam Proton compatdata prefixes.
-                A missing match does not mean a game has no save files.
+                Backup files are stored in a GameSweep/save-backups folder inside
+                your chosen location and survive plugin updates. Old backups
+                remain listed while their original drives are connected.
+                If save detection fails, locate the specific save folder manually
+                within the game's Proton prefix.
               </div>
               {!backupList.length && (
                 <div className="gs-empty">
@@ -731,6 +914,8 @@ export function GameSweepFullScreen() {
                       <div className="gs-muted">
                         {new Date(item.created_at).toLocaleString()} · {item.library}
                       </div>
+                      <div className="gs-muted">Stored in {item.backup_folder || "default backup location"}
+                      </div>
                     </div>
                     <ButtonItem layout="below" disabled={saving || savePreparing}
                       onClick={() => { void beginRestore(item.id); }}>
@@ -745,7 +930,7 @@ export function GameSweepFullScreen() {
           {tab === "settings" && (
             <div className="gs-card gs-settings">
               <h2 style={{ marginTop: 0 }}>GameSweep</h2>
-              <p className="gs-muted">Version 0.6.0 · GitHub: Viber85/game_sweeper</p>
+              <p className="gs-muted">Version 0.7.0 · GitHub: Viber85/game_sweeper</p>
               <p className="gs-muted">Fullscreen SteamOS storage manager. Installed-game data removal requires two acknowledgments.</p>
               <div className="gs-settings-row">
                 <div>
@@ -790,18 +975,147 @@ export function GameSweepFullScreen() {
 
           {busy && !data && <div className="gs-loading">Scanning Steam libraries…</div>}
         </main>
-        {backupPreview && (
+        {saveProblem && !manualBrowser && !folderBrowser && (
+          <div className="gs-modal-layer" role="dialog" aria-modal="true" aria-label="Save files not detected">
+            <div className="gs-modal">
+              <div className="gs-modal-symbol"><FaExclamationTriangle /></div>
+              <h2>Save files not found automatically</h2>
+              <p className="gs-modal-subtitle">
+                {saveProblem}
+              </p>
+              <div className="gs-modal-warning">
+                This does NOT mean your game has no saved progress. GameSweep might
+                not recognize its folder, particularly for custom Non-Steam games.
+                If you know the folder inside the game's Proton C: drive,
+                select it manually. No data has been deleted or backed up.
+              </div>
+              <div className="gs-modal-action">
+                {problemGame && (
+                  <div className="gs-action-primary">
+                    <ButtonItem layout="below" disabled={browserBusy}
+                      onClick={() => { void openManualSavePicker(problemGame, ""); }}>
+                      <FaFolderOpen style={{ marginRight: 7 }} />Find save folder manually…
+                    </ButtonItem>
+                  </div>
+                )}
+                <ButtonItem layout="below" onClick={() => setSaveProblem("")}>
+                  Close
+                </ButtonItem>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {folderBrowser && (
+          <div className="gs-modal-layer" role="dialog" aria-modal="true" aria-label="Choose backup destination">
+            <div className="gs-modal gs-folder-picker">
+              <div className="gs-modal-symbol" style={{ color: "#8ce2d6" }}><FaFolderOpen /></div>
+              <h2>Choose backup destination</h2>
+              <p className="gs-modal-subtitle">
+                Browse using the D-pad or analog stick. A GameSweep/save-backups
+                subfolder is created in the directory you select.
+              </p>
+              <div className="gs-folder-path">
+                {folderBrowser.path || "Storage locations"}
+              </div>
+              {!!error && <div className="gs-note gs-picker-error">{error}</div>}
+              {folderBrowser.free !== undefined && folderBrowser.path &&
+                <div className="gs-muted">{bytes(folderBrowser.free)} available</div>}
+              <div className="gs-picker-list">
+                {(folderBrowser.folders || []).map(folder => (
+                  <ButtonItem key={folder.path} layout="below" disabled={browserBusy}
+                    onClick={() => { void openBackupPicker(folder.path); }}>
+                    <FaFolderOpen style={{ marginRight: 10 }} />{folder.name}
+                  </ButtonItem>
+                ))}
+                {!folderBrowser.folders?.length &&
+                  <div className="gs-muted">No subfolders in this directory.</div>}
+              </div>
+              <div className="gs-modal-action">
+                <ButtonItem layout="below" disabled={browserBusy}
+                  onClick={() => { void openBackupPicker(folderBrowser.parent || ""); }}>
+                  <FaArrowUp style={{ marginRight: 8 }} />Up one level
+                </ButtonItem>
+                <div className="gs-action-primary">
+                  <ButtonItem layout="below" disabled={!folderBrowser.selectable || browserBusy}
+                    onClick={() => { void selectBackupDestination(); }}>
+                    Use this folder for backups
+                  </ButtonItem>
+                </div>
+                <ButtonItem layout="below" disabled={browserBusy}
+                  onClick={() => setFolderBrowser(null)}>Cancel</ButtonItem>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {manualBrowser && manualGame && (
+          <div className="gs-modal-layer" role="dialog" aria-modal="true" aria-label="Choose game save folder">
+            <div className="gs-modal gs-folder-picker">
+              <div className="gs-modal-symbol" style={{ color: "#8ce2d6" }}><FaFolderOpen /></div>
+              <h2>Locate saved games</h2>
+              <p className="gs-modal-subtitle">
+                Game AppID {manualGame.id} · Windows C: drive inside its Proton prefix
+              </p>
+              <div className="gs-folder-path">C:/{manualBrowser.relative || ""}</div>
+              <div className="gs-modal-warning">
+                Select the specific game's save folder, not the entire AppData,
+                Documents or Windows directory. Every file in your selected
+                folder and its subfolders will be backed up; this can include
+                settings if the chosen folder contains them.
+              </div>
+              {!!error && <div className="gs-note gs-picker-error">{error}</div>}
+              <div className="gs-picker-list">
+                {(manualBrowser.folders || []).map(folder => (
+                  <ButtonItem key={folder.relative} layout="below" disabled={browserBusy}
+                    onClick={() => { void openManualSavePicker(manualGame, folder.relative); }}>
+                    <FaFolderOpen style={{ marginRight: 10 }} />{folder.name}
+                  </ButtonItem>
+                ))}
+                {!manualBrowser.folders?.length &&
+                  <div className="gs-muted">No subfolders here.</div>}
+              </div>
+              {manualBrowser.selectable && (
+                <div className="gs-muted">
+                  This folder contains {manualBrowser.count} file(s) · {bytes(manualBrowser.bytes || 0)}
+                </div>
+              )}
+              <div className="gs-modal-action">
+                <ButtonItem layout="below" disabled={browserBusy}
+                  onClick={() => { void openManualSavePicker(manualGame, manualBrowser.parent || ""); }}>
+                  <FaArrowUp style={{ marginRight: 8 }} />Up one level
+                </ButtonItem>
+                <div className="gs-action-primary">
+                  <ButtonItem layout="below" disabled={!manualBrowser.selectable || browserBusy}
+                    onClick={() => { void selectManualSaveLocation(); }}>
+                    Use this game-save folder
+                  </ButtonItem>
+                </div>
+                <ButtonItem layout="below" disabled={browserBusy}
+                  onClick={() => { void clearManualSelection(); }}>
+                  Reset to automatic detection
+                </ButtonItem>
+                <ButtonItem layout="below" disabled={browserBusy}
+                  onClick={() => setManualBrowser(null)}>Cancel</ButtonItem>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {backupPreview && !folderBrowser && !manualBrowser && (
           <div className="gs-modal-layer" role="dialog" aria-modal="true" aria-label="Back up save files">
             <div className="gs-modal">
               <div className="gs-modal-symbol" style={{ color: "#6de4b7" }}><FaSave /></div>
               <h2>Back up save files</h2>
               <p className="gs-modal-subtitle">
                 Only discovered save files are copied, not the entire Proton prefix.
+                Manual locations include all files in the folder you selected.
               </p>
               <div className="gs-modal-details">
                 <strong>{backupPreview.name}</strong>
                 <span>AppID {backupPreview.appid} · {backupPreview.method}</span>
                 <span>{backupPreview.count} files · {bytes(backupPreview.bytes || 0)}</span>
+                <span>Save destination: {backupLocation?.folder || "Default backup folder"}</span>
                 {(backupPreview.sample || []).map((path, i) =>
                   <span key={i} style={{ overflowWrap: "anywhere" }}>{path}</span>)}
               </div>
@@ -810,6 +1124,19 @@ export function GameSweepFullScreen() {
                 locations may not be included. Close the game before backing up.
               </div>
               <div className="gs-modal-action">
+                <ButtonItem layout="below" disabled={saving || browserBusy}
+                  onClick={() => { void openBackupPicker(""); }}>
+                  <FaFolderOpen style={{ marginRight: 7 }} />Change backup destination…
+                </ButtonItem>
+                <ButtonItem layout="below" disabled={saving || browserBusy}
+                  onClick={() => {
+                    if (backupPreview.library && backupPreview.appid)
+                      void openManualSavePicker(
+                        {library: backupPreview.library, id: backupPreview.appid}, ""
+                      );
+                  }}>
+                  Find a different save folder…
+                </ButtonItem>
                 <ButtonItem layout="below" disabled={saving}
                   onClick={() => setBackupPreview(null)}>Cancel</ButtonItem>
                 <div className="gs-action-primary">

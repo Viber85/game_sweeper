@@ -20,6 +20,8 @@ from uuid import uuid4
 
 from cleanup import _running_app_or_prefix
 from scanner import scan
+from backup_locations import backup_root_for, known_backup_roots
+from manual_saves import chosen_folder, inspect_manual_folder, ManualSaveError
 
 RULES_FILE = Path(__file__).resolve().parent / "save_rules.json"
 BACKUP_RELATIVE = Path(".local/share/GameSweep/save-backups")
@@ -211,22 +213,36 @@ def preview_saves(home: Path, cache_file: Path, library: str, appid: str,
     game = _select_game(home, cache_file, library, appid)
     index = _load_rules(rules_file)
     rules, match_type = _match_rules(game, index)
-    if not rules:
+    prefix = Path(game["prefix_path"])
+    manual = chosen_folder(cache_file, library, appid)
+    if manual:
+        files = inspect_manual_folder(prefix, manual)
+        match_type = "Manually selected folder: " + manual
+    elif not rules:
         return {
             "ok": True, "supported": False, "name": game["name"],
             "appid": appid, "library": library, "count": 0, "bytes": 0,
-            "sample": [], "method": "",
-            "message": "No verified save locations for this game in the offline database.",
+            "sample": [], "method": "", "manual": False,
+            "message": (
+                "No save-location rule matched this game's Steam AppID or exact title. "
+                "A Non-Steam game might use a different title or store-specific location. "
+                "Use Find save folder manually to pick a specific folder inside its Proton prefix."
+            ),
         }
-    prefix = Path(game["prefix_path"])
-    files = _find_files(prefix, rules)
+    else:
+        files = _find_files(prefix, rules)
     return {
         "ok": True, "supported": True, "name": game["name"],
         "appid": appid, "library": library, "count": len(files),
         "bytes": sum(item["size"] for item in files),
         "sample": [item["relative"] for item in files[:6]],
-        "method": match_type,
-        "message": "" if files else "No matching save files found in this Proton prefix.",
+        "method": match_type, "manual": bool(manual),
+        "message": "" if files else (
+            "The matched save folder is empty." if manual else
+            "A save-location rule matched, but no files were found in this Proton prefix. "
+            "The game might use a different location or keep saves outside Proton; "
+            "use Find save folder manually if you know where they are."
+        ),
     }
 
 
@@ -234,12 +250,13 @@ def _source_files(home: Path, cache_file: Path, library: str, appid: str,
                   rules_file: Path) -> tuple[dict, list[dict]]:
     game = _select_game(home, cache_file, library, appid)
     rules, _ = _match_rules(game, _load_rules(rules_file))
-    if not rules:
-        raise SaveError("No verified save paths for this game")
+    manual = chosen_folder(cache_file, library, appid)
+    if not rules and not manual:
+        raise SaveError("No verified save paths for this game; choose a save folder manually")
     prefix = Path(game["prefix_path"])
     if _running_app_or_prefix(appid, prefix):
         raise SaveError("Close the game before backing up its saves")
-    files = _find_files(prefix, rules)
+    files = inspect_manual_folder(prefix, manual) if manual else _find_files(prefix, rules)
     if not files:
         raise SaveError("No save files found; no empty backup was created")
     return game, files
@@ -280,10 +297,10 @@ def create_backup(home: Path, cache_file: Path, library: str, appid: str,
                   rules_file: Path = RULES_FILE) -> dict:
     game, files = _source_files(home, cache_file, library, appid, rules_file)
     prefix = Path(game["prefix_path"])
-    root = backup_root(home)
+    root = backup_root_for(home, cache_file)
+    if root.parent.is_symlink() or root.is_symlink():
+        raise SaveError("Backup location is a symbolic link")
     root.mkdir(parents=True, exist_ok=True)
-    if root.is_symlink():
-        raise SaveError("Backup folder is a symbolic link")
     required = sum(item["size"] for item in files)
     if shutil.disk_usage(root).free < required + 16 * 1024**2:
         raise SaveError("Not enough free disk space for a save backup")
@@ -309,18 +326,26 @@ def create_backup(home: Path, cache_file: Path, library: str, appid: str,
             json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         stage.rename(destination)
-        return {key: value for key, value in metadata.items() if key != "files"}
+        return {
+            **{key: value for key, value in metadata.items() if key != "files"},
+            "backup_folder": str(root),
+        }
     except Exception:
         shutil.rmtree(stage, ignore_errors=True)
         raise
 
 
-def _load_backup(home: Path, backup_id: str) -> tuple[Path, dict]:
+def _load_backup(home: Path, backup_id: str,
+                 cache_file: Path | None = None) -> tuple[Path, dict]:
     if not isinstance(backup_id, str) or not ID_PATTERN.fullmatch(backup_id):
         raise SaveError("Invalid backup identifier")
-    directory = backup_root(home) / backup_id
-    if directory.is_symlink() or not directory.is_dir():
-        raise SaveError("Backup not found")
+    directory = next(
+        (root / backup_id for root in known_backup_roots(home, cache_file)
+         if (root / backup_id).is_dir() and not (root / backup_id).is_symlink()),
+        None,
+    )
+    if directory is None:
+        raise SaveError("Backup unavailable. Connect the drive used for this snapshot.")
     try:
         metadata = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
@@ -339,22 +364,29 @@ def _load_backup(home: Path, backup_id: str) -> tuple[Path, dict]:
     return directory, metadata
 
 
-def list_backups(home: Path, appid: str = "") -> list[dict]:
+def list_backups(home: Path, appid: str = "",
+                 cache_file: Path | None = None) -> list[dict]:
     if appid and (not isinstance(appid, str) or not APPID.fullmatch(appid)):
         raise SaveError("Invalid AppID filter")
-    root = backup_root(home)
-    if not root.is_dir() or root.is_symlink():
-        return []
-    items = []
-    for path in root.iterdir():
-        if not ID_PATTERN.fullmatch(path.name):
+    items, ids = [], set()
+    for root in known_backup_roots(home, cache_file):
+        if not root.is_dir() or root.is_symlink():
             continue
-        try:
-            _, metadata = _load_backup(home, path.name)
-            if not appid or appid == metadata.get("appid"):
-                items.append({key: val for key, val in metadata.items() if key != "files"})
-        except (SaveError, OSError):
-            continue
+        for path in root.iterdir():
+            if not ID_PATTERN.fullmatch(path.name) or path.name in ids:
+                continue
+            try:
+                _, metadata = _load_backup(home, path.name, cache_file)
+                if not appid or appid == metadata.get("appid"):
+                    items.append({
+                        **{key: val for key, val in metadata.items() if key != "files"},
+                        "backup_folder": str(path.parent),
+                    })
+                    ids.add(path.name)
+            except (SaveError, OSError):
+                continue
+            if len(items) >= MAX_SNAPSHOTS:
+                break
         if len(items) >= MAX_SNAPSHOTS:
             break
     return sorted(items, key=lambda item: item.get("created_at", ""), reverse=True)
@@ -379,7 +411,7 @@ def _restore_target(home: Path, cache_file: Path, metadata: dict) -> Path:
 
 
 def preview_restore(home: Path, cache_file: Path, backup_id: str) -> dict:
-    folder, metadata = _load_backup(home, backup_id)
+    folder, metadata = _load_backup(home, backup_id, cache_file)
     prefix = _restore_target(home, cache_file, metadata)
     collisions = 0
     for entry in metadata["files"]:
@@ -399,7 +431,7 @@ def preview_restore(home: Path, cache_file: Path, backup_id: str) -> dict:
 
 def restore_backup(home: Path, cache_file: Path, backup_id: str) -> dict:
     """Restore after explicit confirmation; verify *all* hashes before writing."""
-    folder, metadata = _load_backup(home, backup_id)
+    folder, metadata = _load_backup(home, backup_id, cache_file)
     prefix = _restore_target(home, cache_file, metadata)
     # Validate all archived content before writing anything to the prefix.
     for entry in metadata["files"]:
@@ -420,6 +452,7 @@ def restore_backup(home: Path, cache_file: Path, backup_id: str) -> dict:
             rel = _safe_relative(entry["relative"])
             source = folder / "files" / rel
             destination = prefix / rel
+            _no_link_parents(prefix, destination)
             destination.parent.mkdir(parents=True, exist_ok=True)
             _no_link_parents(prefix, destination)
             with tempfile.NamedTemporaryFile(dir=destination.parent,
