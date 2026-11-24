@@ -29,7 +29,7 @@ jobs:
           python tools/build_save_rules.py /tmp/gamesweep-ludusavi-manifest.yaml save_rules.json
           curl --fail --location --retry 3 --max-time 45 \
             -o SAVE-RULES-LICENSE \
-            "https://raw.githubusercontent.com/mtkennerly/ludusavi-manifest/refs/heads/data/LICENSE"
+            "https://raw.githubusercontent.com/mtkennerly/ludusavi-manifest/refs/heads/master/LICENSE"
           test -s SAVE-RULES-LICENSE
       - name: Test scanner
         run: python -m unittest discover -s tests -v

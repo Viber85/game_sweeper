@@ -89,7 +89,7 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
     with args.manifest.open("r", encoding="utf-8") as handle:
-        raw = yaml.safe_load(handle)
+        raw = yaml.load(handle, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
     result = compile_manifest(raw)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")),
