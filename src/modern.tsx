@@ -4,8 +4,8 @@ import type { ReactNode, CSSProperties } from "react";
 import {
   FaBroom, FaCog, FaDownload, FaExclamationTriangle, FaFolderOpen, FaHdd,
   FaHome, FaList, FaSave, FaSearch, FaShieldAlt, FaSyncAlt, FaUndo,
-  FaArrowLeft, FaArrowUp, FaDatabase, FaLayerGroup, FaInfoCircle,
-  FaChevronRight, FaCheckCircle
+  FaArrowLeft, FaArrowUp, FaLayerGroup, FaInfoCircle,
+  FaChevronRight
 } from "react-icons/fa";
 import {
   bytes, scanStorage, resolveName, checkUpdate, requestDeckyUpdate,
