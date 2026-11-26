@@ -24,7 +24,7 @@ from backup_locations import (FolderError, browser as browse_backup_dirs,
 from manual_saves import (ManualSaveError, browse_game_save_folders,
                           select_manual_save_folder, clear_manual_save_folder)
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 REPO = "Viber85/game_sweeper"
 
 

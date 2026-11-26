@@ -5,7 +5,7 @@
   "api_version": 1,
   "publish": {
     "tags": ["storage", "steam", "utility"],
-    "description": "Fullscreen SteamOS storage manager with manual confirmed cleanup and game source detection.",
+    "description": "Modern SteamOS storage manager with confirmed cleanup, save backups, and gamepad navigation.",
     "image": "https://opengraph.githubassets.com/1/Viber85/game_sweeper"
   }
 }

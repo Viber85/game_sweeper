@@ -1,8 +1,8 @@
-# GameSweep v0.7.0
+# GameSweep v0.8.0
 
 GameSweep is a fullscreen Decky Loader storage manager for SteamOS Game Mode.
 
-## What's new in v0.7.0
+## What's new in v0.8.0
 
 - **Full four-way controller navigation** uses Steam's native `vgp_ondirection` / `BTakeFocus` focus system: D-pad or left analog moves up/down/left/right. A selects; B exits fullscreen or dismisses the confirmation dialog. The sidebar, results and confirmation modal are navigable without touch or mouse.
 - New **Delete entire game data (prefix + shaders)** action appears when both compatdata and shader cache folders are present. Both paths and their combined estimated size are displayed in **one** irreversible-deletion confirmation. It does NOT uninstall the main game.
@@ -36,7 +36,7 @@ For unsupported versions of Steam's native focus tree, the handler leaves the ev
 ## Installation
 
 1. Install Decky Loader on SteamOS.
-2. Download **GameSweep-v0.7.0.zip** from [GitHub Releases](https://github.com/Viber85/game_sweeper/releases).
+2. Download **GameSweep-v0.8.0.zip** from [GitHub Releases](https://github.com/Viber85/game_sweeper/releases).
 3. In Decky developer settings, select **Install Plugin from ZIP File** and choose the downloaded release ZIP.
 4. Select GameSweep in the Decky menu; it automatically enters fullscreen.
 5. Open **Settings → Check for updates** to check GitHub Releases for future versions.
@@ -82,7 +82,7 @@ GitHub Actions builds the plugin ZIP, runs frontend and backend tests and create
 
 **Limitations:** Identification and cleanup depend on Steam metadata that may be incomplete, especially for deleted Non-Steam shortcuts. Automatic tests do not prove that the Game Mode navigation works on every Decky Loader version. Fullscreen auto-navigation, controller focus and installed-game removal should be tested on a real SteamOS device using disposable non-essential data first.
 
-## Save Backup Manager (v0.7.0)
+## Save Backup Manager (v0.8.0)
 
 Only SAVE files are included: GameSweep does not back up whole Proton prefixes, game installs or shader caches.
 
@@ -99,7 +99,7 @@ Only SAVE files are included: GameSweep does not back up whole Proton prefixes, 
 - Only explicitly save-tagged Ludusavi paths are bundled; the full Ludusavi detection engine is not implemented.
 - Ludusavi Manifest is distributed under MIT license; see SAVE-RULES-LICENSE inside the release ZIP.
 
-## v0.7.0 — Backup destination chooser and manual save detection
+## v0.8.0 — Backup destination chooser and manual save detection
 
 - In **Save Backups**, select **Choose backup folder**. The fullscreen folder
   browser supports Home, /run/media, /media and /mnt (internal, microSD and mounted drives).
@@ -123,3 +123,10 @@ Only SAVE files are included: GameSweep does not back up whole Proton prefixes, 
   dedicated integrations; GameSweep never claims they are safely backed up.
 - Backup/restore uses file hashes, temporary directories, and explicit
   overwriting confirmation. It never deletes originals during backup.
+
+
+## v0.8.0 test UI
+
+The Decky route `/gamesweep` now opens the new UI inspired by the GameSweep HTML prototype. It consolidates the navigation into Overview, Games, Save Backups and Settings; moves per-game actions into a details drawer; uses a single cleanup chooser and confirmation flow; and exposes the existing real backend for scan, rename lookup, save-only backup and restore, registered storage locations, manual save folder selection, and update checks. **No fake game data** is used in the Decky UI.
+
+For regression testing, the old v0.7 interface remains available in Settings > Classic interface, mounted at `/gamesweep-classic`. The new interface is a TEST prerelease; Game Mode controller focus and layout must be verified on device before production adoption. Destructive cleanup still runs through the unchanged backend protections and explicit confirmations. The storage list and artwork placeholders use local metadata only.

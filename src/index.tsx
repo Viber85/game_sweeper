@@ -3,6 +3,7 @@ import { definePlugin, routerHook } from "@decky/api";
 import { useEffect, useState } from "react";
 import { FaBroom } from "react-icons/fa";
 import { GameSweepFullScreen } from "./fullscreen";
+import { ModernGameSweep } from "./modern";
 
 const FULLSCREEN_PATH = "/gamesweep";
 
@@ -48,7 +49,8 @@ function Launcher() {
 }
 
 export default definePlugin(() => {
-  routerHook.addRoute(FULLSCREEN_PATH, GameSweepFullScreen);
+  routerHook.addRoute(FULLSCREEN_PATH, ModernGameSweep);
+  routerHook.addRoute("/gamesweep-classic", GameSweepFullScreen);
   return {
     name: "GameSweep",
     titleView: <div className={staticClasses.Title}>GameSweep</div>,
@@ -56,6 +58,7 @@ export default definePlugin(() => {
     content: <Launcher />,
     onDismount() {
       routerHook.removeRoute(FULLSCREEN_PATH);
+      routerHook.removeRoute("/gamesweep-classic");
     }
   };
 });
