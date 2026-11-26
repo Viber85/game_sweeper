@@ -41,8 +41,10 @@ const SECTIONS: Array<{id:View;label:string;icon:ReactNode}> = [
 ];
 
 function leave():void{
-  try { Navigation.NavigateBack(); }
-  catch { Router.NavigateBack(); }
+  Router.CloseSideMenus();
+  // Navigation.NavigateBack does not exist in the installed Decky API.
+  try { Navigation.Navigate("/library/home"); }
+  catch { Router.Navigate("/library/home"); }
 }
 
 function Action({children,onClick,kind="secondary",disabled=false}:{
@@ -165,6 +167,8 @@ export function ModernGameSweep(){
   const [location,setLocation]=useState<BackupLocation|null>(null);
   const [update,setUpdate]=useState<UpdateInfo|null>(null);
   const [updateLoading,setUpdateLoading]=useState(false);
+  const [returnDialog,setReturnDialog]=useState<Dialog>(null);
+  const [visibleLimit,setVisibleLimit]=useState(60);
 
   useGameSweepGamepadFocus(rootRef,dialog!==null);
 
@@ -214,14 +218,17 @@ export function ModernGameSweep(){
   useEffect(()=>{void refresh();void loadBackups();void loadLocation();},[refresh,loadBackups,loadLocation]);
 
   function navigate(page:View){
-    setView(page);setEntry(null);setNotice("");setError("");
+    setView(page);setEntry(null);setNotice("");setError("");setVisibleLimit(60);
     mainRef.current?.scrollTo({top:0,behavior:"auto"});
     if(page==="backups"){void loadBackups();void loadLocation();}
   }
 
   function back(){
     if(busy)return;
-    if(dialog){setDialog(null);setError("");return;}
+    if(dialog){
+      setDialog(dialog.kind==="storagePicker"&&returnDialog?returnDialog:null);
+      setReturnDialog(null);setError("");return;
+    }
     if(entry){setEntry(null);return;}
     leave();
   }
@@ -236,7 +243,7 @@ export function ModernGameSweep(){
   const topGames=useMemo(()=>[...all].sort((a,b)=>b.bytes-a.bytes).slice(0,5),[scan]);
   const disks=scan?.disks||[];
   const activeDisk=disks.find(d=>d.library===disk)||disks[0];
-  const usedPct=activeDisk?.total?Math.round(100*activeDisk.used/activeDisk.total):0;
+  const usedPct=activeDisk?.total?Math.max(0,Math.min(100,Math.round(100*activeDisk.used/activeDisk.total))):0;
   const prefixTotal=all.reduce((s,i)=>s+i.prefix_bytes,0);
   const shaderTotal=all.reduce((s,i)=>s+i.shader_bytes,0);
   const candidates=all.filter(x=>x.status!=="installed");
@@ -320,6 +327,7 @@ export function ModernGameSweep(){
   }
 
   function openLocationPicker(path:string=""){
+    if(!path && dialog?.kind==="backupPreview")setReturnDialog(dialog);
     void handleRun(async()=>{
       const r=await browseBackupFolders(path);
       if(!r.ok)throw new Error(r.error||"Cannot browse folders");
@@ -331,7 +339,8 @@ export function ModernGameSweep(){
     void handleRun(async()=>{
       const r=await chooseBackupLocation(path);
       if(!r.ok)throw new Error(r.error||"Cannot use selected folder");
-      setLocation(r);setDialog(null);setNotice("Future backups will be saved in "+r.folder+".");
+      setLocation(r);setDialog(returnDialog);setReturnDialog(null);
+      setNotice("Future backups will be saved in "+r.folder+".");
       await loadBackups();
     });
   }
@@ -443,7 +452,7 @@ export function ModernGameSweep(){
                   </select>
                 </div>
                 <div className="gm-donut-line">
-                  <div className="gm-donut" style={{"--fill":usedPct} as React.CSSProperties}>
+                  <div className="gm-donut" style={{"--fill":`${usedPct}%`} as CSSProperties}>
                     <div className="gm-donut-label"><strong>{bytes(activeDisk?.total||0)}</strong><small>Total capacity</small></div>
                   </div>
                   <div className="gm-storage-values">
@@ -487,8 +496,11 @@ export function ModernGameSweep(){
               </select>
             </div>
             <div className="gm-section-head"><div><h2>Scan results</h2><small>{visible.length} of {all.length} entries · select a game to open details</small></div></div>
-            <GameTable items={visible.slice(0,250)} onOpen={setEntry}/>
-            {visible.length>250?<div className="gm-banner">Showing the largest 250 entries. Use search or filters to find the rest.</div>:null}
+            <GameTable items={visible.slice(0,visibleLimit)} onOpen={setEntry}/>
+            {visible.length>visibleLimit?<div className="gm-section-head">
+              <span className="gm-smallnote">Showing {Math.min(visibleLimit,visible.length)} of {visible.length} entries</span>
+              <Action onClick={()=>setVisibleLimit(v=>v+60)}>Show 60 more games</Action>
+            </div>:null}
           </div>}
 
           {view==="backups"&&<div>
@@ -591,7 +603,8 @@ export function ModernGameSweep(){
           dialog.kind==="notFound"?"Save files not detected":
           dialog.kind==="restoreConfirm"?"Restore save files":
           dialog.kind==="storagePicker"?"Choose backup destination":"Locate game save folder"
-        } onCancel={()=>{if(!busy){setDialog(null);setError("");}}}>
+        } onCancel={back}>
+          <ErrorBanner message={error} onDismiss={()=>setError("")}/>
           {dialog.kind==="cleanupChoice"?<>
             <p>Choose what to remove from <strong>{dialog.entry.name}</strong>. The game itself will not be uninstalled.</p>
             <div className="gm-modal-rows"><span>Compatdata: {bytes(dialog.entry.prefix_bytes)}</span><span>Shader cache: {bytes(dialog.entry.shader_bytes)}</span></div>
