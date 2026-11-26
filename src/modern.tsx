@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, CSSProperties } from "react";
 import {
   FaBroom, FaCog, FaDownload, FaExclamationTriangle, FaFolderOpen, FaHdd,
-  FaHome, FaList, FaSave, FaSearch, FaShieldAlt, FaSyncAlt, FaUndo,
-  FaArrowLeft, FaArrowUp, FaLayerGroup, FaInfoCircle,
+  FaHome, FaList, FaSave, FaSearch, FaSyncAlt, FaUndo,
+  FaArrowLeft, FaArrowUp, FaInfoCircle,
   FaChevronRight
 } from "react-icons/fa";
 import {
@@ -68,17 +68,6 @@ function Source({value}:{value:GameType}){
   </span>;
 }
 
-function Initials({name}:{name:string}){
-  const clean=name.replace(/^Unknown game\s*/i,"");
-  const init=clean.split(/\s+/).filter(Boolean).slice(0,2).map(p=>p[0]).join("").toUpperCase()||"?";
-  const gradients=[
-    ["#37798a","#142e44"],["#946131","#26364b"],["#694b86","#132839"],
-    ["#3c7c67","#143348"],["#984e59","#2a3046"]
-  ];
-  const color=gradients[clean.length%gradients.length];
-  return <span className="gm-game-art" style={{"--art1":color[0],"--art2":color[1]} as CSSProperties}>{init}</span>;
-}
-
 function GameTable({items,onOpen}:{items:Entry[];onOpen:(entry:Entry)=>void}){
   if(!items.length)return <div className="gm-empty">No games match these filters. Run a scan or change the filters.</div>;
   return <div className="gm-card gm-game-table">
@@ -90,7 +79,6 @@ function GameTable({items,onOpen}:{items:Entry[];onOpen:(entry:Entry)=>void}){
       <ButtonItem layout="below" onClick={()=>onOpen(entry)}>
         <div className="gm-game-row-content">
           <div className="gm-game-cell">
-            <Initials name={entry.name}/>
             <div style={{minWidth:0}}>
               <div className="gm-game-name">{entry.name}</div>
               <div className="gm-game-sub">
@@ -100,7 +88,7 @@ function GameTable({items,onOpen}:{items:Entry[];onOpen:(entry:Entry)=>void}){
             </div>
           </div>
           <span className="gm-table-id">{entry.id}</span>
-          <span><Badge entry={entry}/></span>
+          <span className="gm-col-status"><Badge entry={entry}/></span>
           <span className="gm-table-size">{bytes(entry.bytes)}</span>
           <FaChevronRight className="gm-game-chevron"/>
         </div>
@@ -109,13 +97,12 @@ function GameTable({items,onOpen}:{items:Entry[];onOpen:(entry:Entry)=>void}){
   </div>;
 }
 
-function Metric({title,value,note,icon,accent=false}:{
-  title:string;value:string;note:string;icon:ReactNode;accent?:boolean;
+function Metric({title,value,note,accent=false}:{
+  title:string;value:string;note:string;accent?:boolean;
 }){
-  return <div className="gm-card gm-metric">
-    <div className="gm-metric-head"><span>{title}</span>{icon}</div>
-    <strong style={accent?{color:"#56d8cb"}:{}}>{value}</strong>
-    <small>{note}</small>
+  return <div className={"gm-metric"+(accent?" gm-metric-highlight":"")}>
+    <div><div className="gm-metric-head">{title}</div><small>{note}</small></div>
+    <strong>{value}</strong>
   </div>;
 }
 
@@ -408,9 +395,8 @@ export function ModernGameSweep(){
         <div className="gm-brand"><span className="gm-logo"><FaBroom/></span>
           <div><strong>GameSweep</strong><small>Storage manager</small></div>
         </div>
-        <div className="gm-rail-label">Workspace</div>
         <nav className="gs-nav gm-nav">
-          {SECTIONS.map(section=><div className={"gm-nav-item"+(view===section.id?" active":"")} key={section.id}>
+          {SECTIONS.map(section=><div className={"gm-nav-item"+(view===section.id?" active gs-active":"")} key={section.id}>
             <ButtonItem layout="below" onClick={()=>navigate(section.id)}>
               {section.icon}<span>{section.label}</span>
               {section.id==="games"&&all.length>0?<small className="gm-nav-count">{all.length}</small>:null}
@@ -418,19 +404,18 @@ export function ModernGameSweep(){
           </div>)}
         </nav>
         <div className="gm-rail-footer">
-          <div><i/>SteamOS Game Mode</div>
+          <div>SteamOS Game Mode</div>
           <div>↑↓←→ Navigate · A Select</div>
           <div>B Back / Close</div>
-          <div>v0.8.0 test</div>
+          <div>v0.8.1 test</div>
         </div>
       </aside>
       <main ref={mainRef} className="gs-main gm-main">
         <div className="gm-inner">
           <header className="gm-header">
             <div>
-              <div className="gm-eyebrow">✧ GameSweep / {view}</div>
-              <h1>{view==="overview"?"Storage overview":view==="games"?"Your games":view==="backups"?"Save backups":"Settings"}</h1>
-              <p className="gm-lede">{view==="overview"?"Know what's using space. Keep the saves that matter.":view==="games"?"Manage Proton data and shader caches with confidence.":view==="backups"?"Save only the files that matter, not entire game prefixes.":"Configure storage, updates and interface settings."}</p>
+              <h1>{view==="overview"?"Storage overview":view==="games"?"Games":view==="backups"?"Save backups":"Settings"}</h1>
+              <p className="gm-lede">{view==="overview"?"Disk usage, Proton data and shader caches.":view==="games"?"Review stored game data before removing it.":view==="backups"?"Back up and restore detected save files.":"Storage, updates and interface settings."}</p>
             </div>
             <div className="gm-header-actions">
               <span className="gm-smallnote">{scan?.scanned_at?"Scanned "+new Date(scan.scanned_at).toLocaleTimeString():"Not scanned"}</span>
@@ -444,8 +429,8 @@ export function ModernGameSweep(){
             <div className="gm-overview-top">
               <div className="gm-card gm-storage">
                 <div className="gm-storage-head">
-                  <div><div className="gm-card-title">Your storage</div><div className="gm-note">Current Steam library</div></div>
-                  <select className="gm-select" value={disk==="all"?"all":disk}
+                  <div><div className="gm-card-title">Disk usage</div></div>
+                  <select className="gm-select" aria-label="Storage drive" value={disk==="all"?"all":disk}
                     onChange={e=>setDisk(e.currentTarget.value)}>
                     <option value="all">Primary drive</option>
                     {disks.map((d,i)=><option key={d.library} value={d.library}>Drive {i+1} · {d.library.split("/").pop()}</option>)}
@@ -453,24 +438,24 @@ export function ModernGameSweep(){
                 </div>
                 <div className="gm-donut-line">
                   <div className="gm-donut" style={{"--fill":`${usedPct}%`} as CSSProperties}>
-                    <div className="gm-donut-label"><strong>{bytes(activeDisk?.total||0)}</strong><small>Total capacity</small></div>
+                    <div className="gm-donut-label"><strong>{activeDisk?`${usedPct}%`:"—"}</strong><small>Used</small></div>
                   </div>
                   <div className="gm-storage-values">
-                    <div><strong>{bytes(activeDisk?.used||0)}</strong><small>Space used</small></div>
-                    <div><strong className="gm-accent-text">{bytes(activeDisk?.free||0)}</strong><small>Space free</small></div>
+                    <div><strong>{activeDisk?bytes(activeDisk.free):"—"}</strong><small>Free space</small></div>
+                    <div><strong>{activeDisk?bytes(activeDisk.used):"—"}</strong><small>Used space</small></div>
                   </div>
                 </div>
-                <div className="gm-legend"><span><i style={{background:"#4ad9c9"}}/>Used　<i style={{background:"#344a64"}}/>Free</span><span>{usedPct}% in use</span></div>
+                <div className="gm-legend"><span>Total capacity</span><strong>{activeDisk?bytes(activeDisk.total):"Not scanned"}</strong></div>
               </div>
-              <div className="gm-metrics">
-                <Metric title="Compatdata" value={bytes(prefixTotal)} note="Proton prefix data" icon={<FaFolderOpen/>}/>
-                <Metric title="Shader cache" value={bytes(shaderTotal)} note="Rebuildable graphics data" icon={<FaLayerGroup/>}/>
-                <Metric title="Potential cleanup" value={bytes(potential)} note="Review before deletion" icon={<FaBroom/>} accent/>
-                <Metric title="Save backups" value={snapshots.length+" snapshots"} note="Snapshots stored separately" icon={<FaShieldAlt/>}/>
+              <div className="gm-metrics"><h2>Game data</h2>
+                <Metric title="Compatdata" value={bytes(prefixTotal)} note="Proton prefix data"/>
+                <Metric title="Shader cache" value={bytes(shaderTotal)} note="Rebuildable graphics data"/>
+                <Metric title="Potential cleanup" value={bytes(potential)} note="Review before deletion" accent/>
+                <Metric title="Save backups" value={String(snapshots.length)} note="Saved snapshots"/>
               </div>
             </div>
             {reviewCount>0?<div className="gm-review-banner">
-              <FaInfoCircle/><div><strong>{reviewCount} game(s) need your review</strong><small>GameSweep never automatically deletes uncertain data.</small></div>
+              <div><strong>{reviewCount} {reviewCount===1?"game needs":"games need"} review</strong><small>Review uncertain entries before deleting data.</small></div>
               <Action onClick={()=>{setStatus("review");navigate("games");}}>Review games <FaChevronRight/></Action>
             </div>:null}
             <div className="gm-section-head">
@@ -532,7 +517,7 @@ export function ModernGameSweep(){
           {view==="settings"&&<div>
             <div className="gm-card gm-settings-card">
               <div className="gm-setting-line">
-                <div><div className="gm-card-title">GameSweep v0.8.0 test</div><div className="gm-note">Modern UI preview · real SteamOS backend</div></div>
+                <div><div className="gm-card-title">GameSweep v0.8.1 test</div><div className="gm-note">Fullscreen interface · test release</div></div>
                 <Action onClick={checkForUpdates} disabled={updateLoading}><FaSyncAlt/> {updateLoading?"Checking…":"Check updates"}</Action>
               </div>
               {update?.error?<div className="gm-banner error">{update.error}</div>:
@@ -561,11 +546,10 @@ export function ModernGameSweep(){
         {entry&&!dialog?<><div className="gm-scrim" onClick={()=>setEntry(null)}/>
           <aside className="gm-drawer">
             <div className="gm-drawer-body">
-              <div className="gm-drawer-top"><span className="gm-eyebrow">Game details</span>
+              <div className="gm-drawer-top"><span>Game details</span>
                 <Action onClick={()=>setEntry(null)}><FaArrowLeft/> Close</Action></div>
-              <div className="gm-drawer-hero"><strong>{entry.name.slice(0,2).toUpperCase()}</strong></div>
               <h2>{entry.name}</h2>
-              <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:15}}><Source value={entry.game_type}/><Badge entry={entry}/></div>
+              <div className="gm-drawer-meta"><Source value={entry.game_type}/><span aria-hidden="true">·</span><Badge entry={entry}/></div>
               <div className="gm-drawer-section"><h3>Storage breakdown</h3>
                 <div className="gm-breakdown">
                   <div><strong>{bytes(entry.prefix_bytes)}</strong><small>Compatdata</small></div>

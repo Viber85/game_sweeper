@@ -1,4 +1,8 @@
-# GameSweep v0.8.0
+# GameSweep v0.8.1
+
+## v0.8.1 — focused interface
+
+A restrained graphite interface, readable numeric hierarchy, flat lists, and a real storage ring. Existing cleanup and save workflows are unchanged. The classic interface remains available as a fallback. See [UI design review](docs/ui-design-review.md).
 
 GameSweep is a fullscreen Decky Loader storage manager for SteamOS Game Mode.
 
@@ -36,7 +40,7 @@ For unsupported versions of Steam's native focus tree, the handler leaves the ev
 ## Installation
 
 1. Install Decky Loader on SteamOS.
-2. Download **GameSweep-v0.8.0.zip** from [GitHub Releases](https://github.com/Viber85/game_sweeper/releases).
+2. Download **GameSweep-v0.8.1.zip** from [GitHub Releases](https://github.com/Viber85/game_sweeper/releases).
 3. In Decky developer settings, select **Install Plugin from ZIP File** and choose the downloaded release ZIP.
 4. Select GameSweep in the Decky menu; it automatically enters fullscreen.
 5. Open **Settings → Check for updates** to check GitHub Releases for future versions.
